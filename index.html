@@ -9,11 +9,26 @@
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3SZ41FW12K"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-3SZ41FW12K');
+    </script>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
+
+/* ---- ANALYTICS ---- */
+function trackEvent(eventName, params) {
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, params || {});
+  }
+}
 
 /* ---- SOUND ENGINE ---- */
 const SFX = {
@@ -995,40 +1010,206 @@ function WorkshopModal({bucks,onBuild,builtItems,onClose}) {
   );
 }
 
-/* ---- HOME ---- */
+/* ---- HOME (Floor Plan) ---- */
 function HomeModal({inventory,builtItems,pets,energy,onSleep,onClose}) {
+  const [selectedRoom, setSelectedRoom] = useState(null);
   const allItems = Object.values(GROCERY_ITEMS).flat();
+
+  // Categorize items into rooms
+  const foodItems = inventory.filter(n => {
+    const it = allItems.find(x => x.name === n);
+    return it && GROCERY_ITEMS.food_store.some(f => f.name === n);
+  });
+  const clothingItems = inventory.filter(n => {
+    return GROCERY_ITEMS.clothing.some(f => f.name === n);
+  });
+  const supplyItems = inventory.filter(n => {
+    return GROCERY_ITEMS.supply.some(f => f.name === n);
+  });
+  const huntedItems = inventory.filter(n => n.includes("("));
+  const kitchenItems = [...foodItems, ...huntedItems];
+  const bedroomItems = [...clothingItems, ...supplyItems];
+  const livingItems = builtItems.filter(n => {
+    const p = ENG_PROJECTS.find(x => x.name === n);
+    return p && (p.desc.includes("house") || p.desc.includes("stars") || p.desc.includes("friend"));
+  });
+
+  function getItemEmoji(n) {
+    const it = allItems.find(x => x.name === n);
+    if (it) return it.emoji;
+    const p = ENG_PROJECTS.find(x => x.name === n);
+    if (p) return p.emoji;
+    if (n.includes("(")) {
+      const match = n.match(/\((.+)\)/);
+      return match ? match[1] : "📦";
+    }
+    return "📦";
+  }
+
+  function getItemName(n) {
+    if (n.includes("(")) return n.split(" (")[0];
+    return n;
+  }
+
   return (
-    <ModalWrap title="Your House" emoji="🏡" color="#5B21B6" onClose={onClose}>
-      <div style={{display:"flex",gap:8,marginBottom:10}}>
-        <div style={{flex:1,background:"#EDE9FE",borderRadius:8,padding:8,textAlign:"center"}}>
-          <p style={{margin:"0 0 3px",fontSize:12,color:"#5B21B6",fontWeight:"bold"}}>⚡ Energy</p>
-          <div style={{background:"#DDD6FE",borderRadius:6,height:14,overflow:"hidden"}}>
-            <div style={{height:"100%",width:energy+"%",background:energy>30?"#8B5CF6":"#EF4444",borderRadius:6,transition:"width 0.5s"}}/></div></div>
-        <button onClick={onSleep} disabled={energy>=100} style={{padding:"8px 14px",background:energy>=100?"#D1D5DB":"#8B5CF6",color:"white",border:"none",borderRadius:8,cursor:energy>=100?"default":"pointer",fontWeight:"bold",fontSize:12}}>😴 Sleep</button>
-      </div>
-      {pets.length > 0 && (
-        <div>
-          <h3 style={{color:"#5B21B6",margin:"0 0 6px",fontSize:14}}>🐾 Your Pets</h3>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-            {pets.map((pet,i)=>(
-              <div key={i} style={{background:"#FEF3C7",borderRadius:8,padding:6,textAlign:"center"}}>
-                <svg viewBox="0 0 40 40" width="40" height="40"><PetSVG pet={pet} x={20} y={20} size={34}/></svg>
-                <div style={{fontSize:9,fontWeight:"bold",color:"#92400E"}}>{pet.name}</div>
-              </div>
-            ))}
-          </div>
+    <div style={{
+      position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
+      display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:10
+    }}>
+      <div style={{
+        background:"white",borderRadius:16,padding:16,maxWidth:520,width:"100%",
+        boxShadow:"0 8px 32px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"
+      }}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <h2 style={{margin:0,color:"#5B21B6",fontSize:18}}>🏡 Your House</h2>
+          <button onClick={onClose} style={{background:"#EF4444",color:"white",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",fontWeight:"bold",fontSize:14}}>✕</button>
         </div>
-      )}
-      <h3 style={{color:"#5B21B6",margin:"0 0 6px",fontSize:14}}>🎒 Your Items</h3>
-      <div style={{display:"flex",gap:3,flexWrap:"wrap",minHeight:30}}>
-        {inventory.length===0&&builtItems.length===0&&<p style={{color:"#9CA3AF",fontSize:11,margin:0}}>Nothing yet!</p>}
-        {inventory.map((n,i)=>{const it=allItems.find(x=>x.name===n);if(!it)return null;
-          return <span key={"i"+i} style={{background:it.type==="need"?"#D1FAE5":"#FEF3C7",borderRadius:6,padding:"2px 6px",fontSize:10}}>{it.emoji} {n}</span>;})}
-        {builtItems.map((n,i)=>{const p=ENG_PROJECTS.find(x=>x.name===n);if(!p)return null;
-          return <span key={"b"+i} style={{background:"#EDE9FE",borderRadius:6,padding:"2px 6px",fontSize:10}}>{p.emoji} {n}</span>;})}
+
+        {/* Energy bar */}
+        <div style={{display:"flex",gap:8,marginBottom:10}}>
+          <div style={{flex:1,background:"#EDE9FE",borderRadius:8,padding:6,textAlign:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
+              <span style={{fontSize:11,color:"#5B21B6",fontWeight:"bold"}}>⚡ Energy</span>
+              <div style={{flex:1,maxWidth:100,background:"#DDD6FE",borderRadius:6,height:12,overflow:"hidden"}}>
+                <div style={{height:"100%",width:energy+"%",background:energy>30?"#8B5CF6":"#EF4444",borderRadius:6,transition:"width 0.5s"}}/>
+              </div>
+              <span style={{fontSize:10,color:"#7C3AED"}}>{energy}%</span>
+            </div>
+          </div>
+          <button onClick={onSleep} disabled={energy>=100} style={{padding:"6px 12px",background:energy>=100?"#D1D5DB":"#8B5CF6",color:"white",border:"none",borderRadius:8,cursor:energy>=100?"default":"pointer",fontWeight:"bold",fontSize:11}}>😴 Sleep</button>
+        </div>
+
+        {/* Floor Plan SVG */}
+        <svg viewBox="0 0 480 320" style={{width:"100%",height:"auto",borderRadius:12,border:"2px solid #D1D5DB",background:"#FAFAF9"}}>
+          {/* Floor */}
+          <rect width="480" height="320" fill="#F5F0E8" rx="8"/>
+
+          {/* ---- BEDROOM (top-left) ---- */}
+          <rect x="8" y="8" width="230" height="180" rx="6" fill={selectedRoom==="bedroom"?"#EDE9FE":"#F5F3FF"} stroke="#8B5CF6" strokeWidth={2} style={{cursor:"pointer"}} onClick={()=>setSelectedRoom(selectedRoom==="bedroom"?null:"bedroom")}/>
+          <text x="123" y="28" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#5B21B6">🛏️ Bedroom</text>
+          {/* Bed */}
+          <rect x="20" y="50" width="70" height="45" rx="6" fill="#C4B5FD"/>
+          <rect x="20" y="50" width="70" height="15" rx="6" fill="#A78BFA"/>
+          <rect x="25" y="53" width="18" height="10" rx="4" fill="white" opacity="0.7"/>
+          <rect x="48" y="53" width="18" height="10" rx="4" fill="white" opacity="0.7"/>
+          {/* Wardrobe */}
+          <rect x="160" y="40" width="55" height="70" rx="4" fill="#D4A76A"/>
+          <rect x="160" y="40" width="55" height="70" rx="4" fill="none" stroke="#92400E" strokeWidth="1.5"/>
+          <line x1="187" y1="42" x2="187" y2="108" stroke="#92400E" strokeWidth="1"/>
+          <circle cx="182" cy="75" r="2" fill="#92400E"/><circle cx="192" cy="75" r="2" fill="#92400E"/>
+          {/* Rug */}
+          <ellipse cx="100" cy="140" rx="45" ry="25" fill="#DDD6FE" opacity="0.6"/>
+          {/* Bedroom items */}
+          {bedroomItems.map((n,i) => {
+            const col = i % 4;
+            const row = Math.floor(i / 4);
+            return <text key={"br"+i} x={25+col*28} y={128+row*22} fontSize="18" style={{cursor:"default"}}>{getItemEmoji(n)}</text>;
+          })}
+          {clothingItems.length > 0 && (
+            <text x="165" y="125" fontSize="9" fill="#6B7280" textAnchor="middle">👕 Clothes inside</text>
+          )}
+
+          {/* ---- KITCHEN (top-right) ---- */}
+          <rect x="246" y="8" width="226" height="180" rx="6" fill={selectedRoom==="kitchen"?"#ECFDF5":"#F0FDF4"} stroke="#16A34A" strokeWidth={2} style={{cursor:"pointer"}} onClick={()=>setSelectedRoom(selectedRoom==="kitchen"?null:"kitchen")}/>
+          <text x="359" y="28" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#065F46">🍳 Kitchen</text>
+          {/* Counter */}
+          <rect x="258" y="40" width="100" height="22" rx="3" fill="#D4A76A"/>
+          <rect x="258" y="40" width="100" height="22" rx="3" fill="none" stroke="#92400E" strokeWidth="1"/>
+          {/* Stove */}
+          <rect x="370" y="40" width="45" height="30" rx="3" fill="#4B5563"/>
+          <circle cx="383" cy="52" r="6" fill="#1F2937"/><circle cx="383" cy="52" r="4" fill="#374151"/>
+          <circle cx="403" cy="52" r="6" fill="#1F2937"/><circle cx="403" cy="52" r="4" fill="#374151"/>
+          {/* Fridge */}
+          <rect x="420" y="38" width="35" height="55" rx="4" fill="#E5E7EB"/>
+          <rect x="420" y="38" width="35" height="55" rx="4" fill="none" stroke="#9CA3AF" strokeWidth="1.5"/>
+          <line x1="420" y1="60" x2="455" y2="60" stroke="#9CA3AF" strokeWidth="1"/>
+          <circle cx="450" cy="50" r="1.5" fill="#6B7280"/>
+          <circle cx="450" cy="70" r="1.5" fill="#6B7280"/>
+          {/* Table */}
+          <rect x="290" y="110" width="60" height="40" rx="4" fill="#D4BC94"/>
+          <rect x="290" y="110" width="60" height="40" rx="4" fill="none" stroke="#92400E" strokeWidth="1"/>
+          {/* Kitchen items (food on table/counter) */}
+          {kitchenItems.map((n,i) => {
+            const col = i % 5;
+            const row = Math.floor(i / 5);
+            return <text key={"ki"+i} x={265+col*26} y={85+row*22} fontSize="16" style={{cursor:"default"}}>{getItemEmoji(n)}</text>;
+          })}
+
+          {/* ---- LIVING ROOM (bottom, full width) ---- */}
+          <rect x="8" y="196" width="464" height="116" rx="6" fill={selectedRoom==="living"?"#FEF3C7":"#FFFBEB"} stroke="#D97706" strokeWidth={2} style={{cursor:"pointer"}} onClick={()=>setSelectedRoom(selectedRoom==="living"?null:"living")}/>
+          <text x="240" y="216" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#92400E">🛋️ Living Room</text>
+          {/* Couch */}
+          <rect x="20" y="230" width="90" height="35" rx="8" fill="#A78BFA"/>
+          <rect x="20" y="228" width="90" height="12" rx="6" fill="#8B5CF6"/>
+          <rect x="18" y="228" width="14" height="37" rx="4" fill="#7C3AED"/>
+          <rect x="98" y="228" width="14" height="37" rx="4" fill="#7C3AED"/>
+          {/* TV */}
+          <rect x="390" y="225" width="60" height="40" rx="3" fill="#1E1B4B"/>
+          <rect x="393" y="228" width="54" height="34" rx="2" fill="#374151"/>
+          <rect x="415" y="268" width="10" height="8" fill="#4B5563"/>
+          <rect x="405" y="276" width="30" height="4" rx="2" fill="#6B7280"/>
+          {/* Coffee table */}
+          <rect x="170" y="248" width="70" height="30" rx="4" fill="#D4BC94"/>
+          <rect x="170" y="248" width="70" height="30" rx="4" fill="none" stroke="#92400E" strokeWidth="1"/>
+          {/* Bookshelf area */}
+          <rect x="280" y="230" width="50" height="50" rx="3" fill="#D4A76A" opacity="0.5"/>
+          {/* Living room items */}
+          {livingItems.map((n,i) => {
+            return <text key={"li"+i} x={285+i*22} y={260} fontSize="18" style={{cursor:"default"}}>{getItemEmoji(n)}</text>;
+          })}
+          {/* Pets in living room */}
+          {pets.map((pet,i) => (
+            <g key={"pet"+i}>
+              <PetSVG pet={pet} x={140+i*45} y={250} size={30}/>
+            </g>
+          ))}
+          {/* Rug */}
+          <ellipse cx="205" cy="270" rx="55" ry="18" fill="#FDE68A" opacity="0.4"/>
+
+          {/* Room labels with item counts */}
+          <text x="123" y="174" textAnchor="middle" fontSize="10" fill="#7C3AED">{bedroomItems.length} item{bedroomItems.length!==1?"s":""}</text>
+          <text x="359" y="174" textAnchor="middle" fontSize="10" fill="#059669">{kitchenItems.length} item{kitchenItems.length!==1?"s":""}</text>
+          <text x="240" y="300" textAnchor="middle" fontSize="10" fill="#B45309">{livingItems.length} item{livingItems.length!==1?"s":""}{pets.length>0?(" + "+pets.length+" pet"+(pets.length!==1?"s":"")):""}
+          </text>
+
+          {/* Door between rooms */}
+          <rect x="225" y="70" width="26" height="5" fill="#D4A76A"/>
+          <rect x="100" y="186" width="40" height="18" rx="4" fill="#D4A76A"/>
+          <rect x="340" y="186" width="40" height="18" rx="4" fill="#D4A76A"/>
+        </svg>
+
+        {/* Selected room detail */}
+        {selectedRoom && (
+          <div style={{marginTop:10,background:selectedRoom==="bedroom"?"#F5F3FF":selectedRoom==="kitchen"?"#F0FDF4":"#FFFBEB",borderRadius:10,padding:10}}>
+            <h3 style={{margin:"0 0 6px",fontSize:14,color:selectedRoom==="bedroom"?"#5B21B6":selectedRoom==="kitchen"?"#065F46":"#92400E"}}>
+              {selectedRoom==="bedroom"?"🛏️ Bedroom":selectedRoom==="kitchen"?"🍳 Kitchen":"🛋️ Living Room"}
+            </h3>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {selectedRoom==="bedroom" && bedroomItems.length===0 && <p style={{color:"#9CA3AF",fontSize:11,margin:0}}>No items yet. Buy clothes and supplies!</p>}
+              {selectedRoom==="bedroom" && bedroomItems.map((n,i) => {
+                const it = allItems.find(x=>x.name===n);
+                return <span key={i} style={{background:it&&it.type==="need"?"#D1FAE5":"#FEF3C7",borderRadius:6,padding:"3px 8px",fontSize:11}}>{getItemEmoji(n)} {getItemName(n)}</span>;
+              })}
+              {selectedRoom==="kitchen" && kitchenItems.length===0 && <p style={{color:"#9CA3AF",fontSize:11,margin:0}}>No food yet. Go shopping or hunting!</p>}
+              {selectedRoom==="kitchen" && kitchenItems.map((n,i) => {
+                const it = allItems.find(x=>x.name===n);
+                return <span key={i} style={{background:it&&it.type==="need"?"#D1FAE5":"#FEF3C7",borderRadius:6,padding:"3px 8px",fontSize:11}}>{getItemEmoji(n)} {getItemName(n)}</span>;
+              })}
+              {selectedRoom==="living" && livingItems.length===0 && pets.length===0 && <p style={{color:"#9CA3AF",fontSize:11,margin:0}}>Build items at the Workshop or adopt a pet!</p>}
+              {selectedRoom==="living" && livingItems.map((n,i) => {
+                const p = ENG_PROJECTS.find(x=>x.name===n);
+                return <span key={i} style={{background:"#EDE9FE",borderRadius:6,padding:"3px 8px",fontSize:11}}>{p?p.emoji:"📦"} {n}</span>;
+              })}
+              {selectedRoom==="living" && pets.map((pet,i) => (
+                <span key={"p"+i} style={{background:"#FEF3C7",borderRadius:6,padding:"3px 8px",fontSize:11}}>🐾 {pet.name}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p style={{textAlign:"center",color:"#9CA3AF",fontSize:10,marginTop:8}}>Click a room to see what's inside!</p>
       </div>
-    </ModalWrap>
+    </div>
   );
 }
 
@@ -1822,14 +2003,32 @@ function SpeechBubble({x, y, text, name}) {
 }
 
 /* ---- ISLAND ZONE ---- */
-function IslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,tick}) {
+function IslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,tick,pets,activePet,onTogglePet}) {
   const [owlPos,setOwlPos]=useState({x:400,y:420});
+  const [petPos,setPetPos]=useState({x:420,y:430});
   const [target,setTarget]=useState(null);
   const [flying,setFlying]=useState(false);
   const [speechBubble,setSpeechBubble]=useState(null);
   const aRef=useRef(null);
   const bob=Math.sin(tick*0.3)*3;
+  const petBob=Math.sin(tick*0.35+1)*2.5;
   const npcs=ISLAND_NPCS[island.id]||[];
+
+  // Pet follows the owl with a delay
+  useEffect(()=>{
+    if(!activePet) return;
+    const followInterval = setInterval(()=>{
+      setPetPos(pp=>{
+        const dx=owlPos.x+20-pp.x;
+        const dy=owlPos.y+15-pp.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<8) return pp;
+        const spd=Math.max(1.5,dist*0.06);
+        return {x:pp.x+(dx/dist)*spd, y:pp.y+(dy/dist)*spd};
+      });
+    },50);
+    return ()=>clearInterval(followInterval);
+  },[activePet,owlPos]);
 
   useEffect(()=>{
     if(!target)return;setFlying(true);
@@ -1868,12 +2067,39 @@ function IslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,ti
         <ellipse cx="650" cy="342" rx="100" ry="20" fill="#86EFAC" opacity={0.4}/>
         {buildings.map(b=><Building3D key={b.id} x={b.x} btype={b.btype} name={b.name} onClick={()=>clickB(b)}/>)}
         {npcs.map((npc,i)=><NpcOwl key={i} x={npc.startX} y={410} npc={npc} tick={tick} onClick={()=>clickNpc(npc)}/>)}
+        {/* Active pet following */}
+        {activePet && (
+          <g transform={"translate(0,"+petBob+")"} style={{cursor:"pointer"}} onClick={()=>onTogglePet(null)}>
+            <PetSVG pet={activePet} x={petPos.x} y={petPos.y} size={28}/>
+            <text x={petPos.x} y={petPos.y+20} textAnchor="middle" fontSize="8" fill="#92400E" fontWeight="bold">{activePet.name}</text>
+          </g>
+        )}
+        {/* Idle pets at home island */}
+        {island.id==="home" && pets.filter(p=>!activePet||p.name!==activePet.name).map((pet,i) => {
+          const px = 320 + i * 60;
+          const py = 430;
+          const idleBob = Math.sin(tick*0.2+i*2)*3;
+          return (
+            <g key={"homepet"+i} transform={"translate(0,"+idleBob+")"} style={{cursor:"pointer"}} onClick={()=>onTogglePet(pet)}>
+              <PetSVG pet={pet} x={px} y={py} size={30}/>
+              <text x={px} y={py+22} textAnchor="middle" fontSize="8" fill="#92400E" fontWeight="bold">{pet.name}</text>
+              <text x={px} y={py+32} textAnchor="middle" fontSize="7" fill="#7C3AED">tap to follow!</text>
+            </g>
+          );
+        })}
         <g transform={"translate(0,"+bob+")"}><Owl x={owlPos.x} y={owlPos.y} size={42} color={owlColor} name={owlName} isFlying={flying}/></g>
         {speechBubble&&<SpeechBubble x={speechBubble.x} y={speechBubble.y} text={speechBubble.text} name={speechBubble.name}/>}
         <rect x="280" y="8" width="240" height="30" rx="15" fill="rgba(0,0,0,0.3)"/>
         <text x="400" y="28" textAnchor="middle" fontSize="16" fill="white" fontWeight="bold">{island.emoji} {island.name}</text>
       </svg>
       <button onClick={onBack} style={{position:"absolute",top:12,left:12,background:"rgba(0,0,0,0.4)",color:"white",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 14px",cursor:"pointer",fontWeight:"bold",fontSize:13,zIndex:5}}>← Back to Opal</button>
+      {activePet && (
+        <div style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.9)",borderRadius:10,padding:"4px 10px",fontSize:11,fontWeight:"bold",color:"#92400E",zIndex:5,display:"flex",alignItems:"center",gap:4}}>
+          <svg viewBox="0 0 24 24" width="18" height="18"><PetSVG pet={activePet} x={12} y={12} size={20}/></svg>
+          {activePet.name} following
+          <button onClick={()=>onTogglePet(null)} style={{background:"#EF4444",color:"white",border:"none",borderRadius:"50%",width:16,height:16,fontSize:9,cursor:"pointer",fontWeight:"bold",marginLeft:2}}>✕</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1919,6 +2145,7 @@ function OpalGame() {
   const [inventory,setInventory]=useState([]);
   const [builtItems,setBuiltItems]=useState([]);
   const [pets,setPets]=useState([]);
+  const [activePet,setActivePet]=useState(null);
   const [savings, setSavings] = useState({ spending: 0, giving: 0, future: 0 });
   const [energy,setEnergy]=useState(100);
   const [msg,setMsg]=useState("");
@@ -1938,22 +2165,23 @@ function OpalGame() {
     if(isFlying)return;
     if(energy<=0){setMsg("Too tired! Go home to sleep! 😴");setTimeout(()=>setMsg(""),2000);return;}
     SFX.fly();
+    trackEvent('island_visit',{island:isl.name});
     setTargetPos({x:isl.x,y:isl.y-30});setMsg("Flying to "+isl.emoji+" "+isl.name+"...");setEnergy(e=>Math.max(0,e-3));
     setTimeout(()=>{setCurrentIsland(isl);setView("island");setMsg("");},900);
   }
-  function handleBuildingClick(b){setActiveModal(b.id);}
+  function handleBuildingClick(b){trackEvent('building_enter',{building:b.name});setActiveModal(b.id);}
   function goBack(){setView("overworld");setCurrentIsland(null);setCurrentDest(null);setActiveModal(null);}
-  function buyItem(item){if(bucks>=item.price&&!inventory.includes(item.name)){setBucks(b=>b-item.price);setInventory(inv=>[...inv,item.name]);}}
-  function buildItem(p){if(bucks>=p.price&&!builtItems.includes(p.name)){setBucks(b=>b-p.price);setBuiltItems(bi=>[...bi,p.name]);}}
-  function buyPet(pet){if(bucks>=pet.price&&!pets.some(p=>p.name===pet.name)){setBucks(b=>b-pet.price);setPets(ps=>[...ps,pet]);}}
+  function buyItem(item){if(bucks>=item.price&&!inventory.includes(item.name)){setBucks(b=>b-item.price);setInventory(inv=>[...inv,item.name]);trackEvent('item_purchased',{item:item.name,price:item.price,type:item.type});}}
+  function buildItem(p){if(bucks>=p.price&&!builtItems.includes(p.name)){setBucks(b=>b-p.price);setBuiltItems(bi=>[...bi,p.name]);trackEvent('item_built',{item:p.name,price:p.price});}}
+  function buyPet(pet){if(bucks>=pet.price&&!pets.some(p=>p.name===pet.name)){setBucks(b=>b-pet.price);setPets(ps=>[...ps,pet]);trackEvent('pet_adopted',{pet:pet.name,animal:pet.animal,price:pet.price});}}
   function depositToSavings(cat, amt) {
-    if (bucks >= amt) { setBucks(b => b - amt); setSavings(s => ({ ...s, [cat]: s[cat] + amt })); }
+    if (bucks >= amt) { setBucks(b => b - amt); setSavings(s => ({ ...s, [cat]: s[cat] + amt })); trackEvent('bank_deposit',{account:cat,amount:amt}); }
   }
   function withdrawFromSavings(cat, amt) {
-    if (savings[cat] >= amt) { setSavings(s => ({ ...s, [cat]: s[cat] - amt })); setBucks(b => b + amt); }
+    if (savings[cat] >= amt) { setSavings(s => ({ ...s, [cat]: s[cat] - amt })); setBucks(b => b + amt); trackEvent('bank_withdraw',{account:cat,amount:amt}); }
   }
   function giveFromSavings(amt) {
-    if (savings.giving >= amt) { setSavings(s => ({ ...s, giving: s.giving - amt })); }
+    if (savings.giving >= amt) { setSavings(s => ({ ...s, giving: s.giving - amt })); trackEvent('donation',{amount:amt}); }
   }
   function handleCatch(caughtItems) {
     const names = caughtItems.map(c => c.name + " (" + c.emoji + ")");
@@ -1978,7 +2206,7 @@ function OpalGame() {
         <div style={{display:"flex",gap:8,marginBottom:20,justifyContent:"center"}}>
           {OWL_COLORS.map((c,i)=><button key={i} onClick={()=>setColorIdx(i)} style={{width:36,height:36,borderRadius:"50%",background:c,border:i===colorIdx?"3px solid white":"3px solid transparent",cursor:"pointer",transform:i===colorIdx?"scale(1.2)":"scale(1)",transition:"all 0.2s"}}/>)}
         </div>
-        <button onClick={()=>{if(owlName.trim()){SFX.init().then(()=>{SFX.startSong();setScreen("game");});}}} disabled={!owlName.trim()} style={{width:"100%",padding:14,background:owlName.trim()?"linear-gradient(90deg,#7C3AED,#6366F1)":"#4B5563",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:owlName.trim()?"pointer":"default"}}>🚀 Start Adventure!</button>
+        <button onClick={()=>{if(owlName.trim()){SFX.init().then(()=>{SFX.startSong();trackEvent('game_start',{owl_name:owlName.trim(),owl_color:OWL_COLORS[colorIdx]});setScreen("game");});}}} disabled={!owlName.trim()} style={{width:"100%",padding:14,background:owlName.trim()?"linear-gradient(90deg,#7C3AED,#6366F1)":"#4B5563",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:owlName.trim()?"pointer":"default"}}>🚀 Start Adventure!</button>
       </div>
     </div>
   );
@@ -2001,13 +2229,13 @@ function OpalGame() {
       {msg&&<div style={{background:"rgba(124,58,237,0.85)",color:"white",textAlign:"center",padding:6,borderRadius:8,fontWeight:"bold",fontSize:13,maxWidth:800,margin:"0 auto 6px"}}>{msg}</div>}
       <div style={{maxWidth:800,margin:"0 auto",position:"relative"}}>
         {view==="overworld"&&<OverworldMap owlPos={owlPos} onIslandClick={flyToIsland} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} isFlying={isFlying} tick={tick}/>}
-        {(view==="island"||view==="destination")&&currentIsland&&<IslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick}/>}
+        {(view==="island"||view==="destination")&&currentIsland&&<IslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick} pets={pets} activePet={activePet} onTogglePet={(pet)=>setActivePet(pet)}/>}
       </div>
 
-      {activeModal==="math_class"&&<MathClassModal bucks={bucks} onEarn={n=>{SFX.earnBucks();setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="math_class"&&<MathClassModal bucks={bucks} onEarn={n=>{SFX.earnBucks();trackEvent('bucks_earned',{source:'math',amount:n});setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="playground"&&<PlaygroundModal owlColor={OWL_COLORS[colorIdx]} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="library"&&<LibraryModal onClose={()=>setActiveModal(null)}/>}
-      {activeModal==="job_board"&&<WorkModal bucks={bucks} onEarn={n=>{SFX.earnBucks();setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="job_board"&&<WorkModal bucks={bucks} onEarn={n=>{SFX.earnBucks();trackEvent('bucks_earned',{source:'job',amount:n});setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="workshop"&&<WorkshopModal bucks={bucks} onBuild={p=>{SFX.spendBucks();buildItem(p);}} builtItems={builtItems} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="food_store"&&<ShopModal title="Food Store" emoji="🥖" color="#16A34A" items={GROCERY_ITEMS.food_store} bucks={bucks} onBuy={item=>{SFX.spendBucks();buyItem(item);}} inventory={inventory} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="clothing"&&<ShopModal title="Clothing" emoji="👕" color="#DB2777" items={GROCERY_ITEMS.clothing} bucks={bucks} onBuy={item=>{SFX.spendBucks();buyItem(item);}} inventory={inventory} onClose={()=>setActiveModal(null)}/>}
