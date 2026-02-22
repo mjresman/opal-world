@@ -2194,6 +2194,57 @@ function OpalGame() {
     else{setMsg("Need 🪙 "+dest.cost+"! You have 🪙 "+bucks);setTimeout(()=>setMsg(""),2500);}
   }
 
+  if(screen==="instructions") return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A,#1E1B4B,#312E81)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:20,color:"white"}}>
+      <h1 style={{fontSize:32,margin:"0 0 4px",background:"linear-gradient(90deg,#C4B5FD,#A5B4FC,#FCD34D)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",fontWeight:800}}>How to Play</h1>
+      <p style={{fontSize:13,color:"#A5B4FC",margin:"0 0 20px"}}>Welcome to Opal World, {owlName}!</p>
+      <div style={{maxWidth:420,width:"100%",display:"flex",flexDirection:"column",gap:12}}>
+
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <span style={{fontSize:28,flexShrink:0}}>🗺️</span>
+          <div>
+            <h3 style={{margin:"0 0 4px",fontSize:15,color:"#FCD34D"}}>Explore Floating Islands</h3>
+            <p style={{margin:0,fontSize:13,color:"#C4B5FD",lineHeight:1.5}}>Opal World has many floating islands to visit! Click on an island to fly there. Each island has buildings you can enter with different activities inside.</p>
+          </div>
+        </div>
+
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <span style={{fontSize:28,flexShrink:0}}>🪙</span>
+          <div>
+            <h3 style={{margin:"0 0 4px",fontSize:15,color:"#FCD34D"}}>Earn Owl Bucks</h3>
+            <p style={{margin:0,fontSize:13,color:"#C4B5FD",lineHeight:1.5}}>You can earn Owl Bucks two ways! Solve <b style={{color:"#93C5FD"}}>math problems</b> at School Island, or do <b style={{color:"#6EE7B7"}}>jobs</b> at the Engineering Isle like delivering mail, painting walls, and chopping firewood.</p>
+          </div>
+        </div>
+
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <span style={{fontSize:28,flexShrink:0}}>🛍️</span>
+          <div>
+            <h3 style={{margin:"0 0 4px",fontSize:15,color:"#FCD34D"}}>Wants vs. Needs</h3>
+            <p style={{margin:0,fontSize:13,color:"#C4B5FD",lineHeight:1.5}}>When you shop, think about what's a <b style={{color:"#10B981"}}>need</b> (things you must have, like food and clothes) and what's a <b style={{color:"#F59E0B"}}>want</b> (nice to have, like toys and candy). Buy your needs first!</p>
+          </div>
+        </div>
+
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <span style={{fontSize:28,flexShrink:0}}>🏦</span>
+          <div>
+            <h3 style={{margin:"0 0 4px",fontSize:15,color:"#FCD34D"}}>Save at the Bank</h3>
+            <p style={{margin:0,fontSize:13,color:"#C4B5FD",lineHeight:1.5}}>Visit Bank Island to save your Owl Bucks in three accounts: <b style={{color:"#10B981"}}>Spending</b> for things you plan to buy, <b style={{color:"#EC4899"}}>Giving</b> to help others, and <b style={{color:"#0EA5E9"}}>Future</b> for big goals like school!</p>
+          </div>
+        </div>
+
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <span style={{fontSize:28,flexShrink:0}}>🦉</span>
+          <div>
+            <h3 style={{margin:"0 0 4px",fontSize:15,color:"#FCD34D"}}>Talk to Owl Friends</h3>
+            <p style={{margin:0,fontSize:13,color:"#C4B5FD",lineHeight:1.5}}>You'll meet friendly owls on every island! Click on them to hear helpful tips about money, wants, and needs. You can also adopt pets, go hunting, and travel to faraway places!</p>
+          </div>
+        </div>
+
+        <button onClick={()=>setScreen("game")} style={{width:"100%",padding:14,background:"linear-gradient(90deg,#7C3AED,#6366F1)",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:"pointer",marginTop:4}}>🎮 Let's Go!</button>
+      </div>
+    </div>
+  );
+
   if(screen==="title") return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A,#1E1B4B,#312E81)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:20,color:"white"}}>
       <svg width="100" height="110" viewBox="0 0 80 100" style={{marginBottom:8}}><Owl x={40} y={40} size={60} color={OWL_COLORS[colorIdx]} isFlying={true}/></svg>
@@ -2206,7 +2257,7 @@ function OpalGame() {
         <div style={{display:"flex",gap:8,marginBottom:20,justifyContent:"center"}}>
           {OWL_COLORS.map((c,i)=><button key={i} onClick={()=>setColorIdx(i)} style={{width:36,height:36,borderRadius:"50%",background:c,border:i===colorIdx?"3px solid white":"3px solid transparent",cursor:"pointer",transform:i===colorIdx?"scale(1.2)":"scale(1)",transition:"all 0.2s"}}/>)}
         </div>
-        <button onClick={()=>{if(owlName.trim()){SFX.init().then(()=>{SFX.startSong();trackEvent('game_start',{owl_name:owlName.trim(),owl_color:OWL_COLORS[colorIdx]});setScreen("game");});}}} disabled={!owlName.trim()} style={{width:"100%",padding:14,background:owlName.trim()?"linear-gradient(90deg,#7C3AED,#6366F1)":"#4B5563",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:owlName.trim()?"pointer":"default"}}>🚀 Start Adventure!</button>
+        <button onClick={()=>{if(owlName.trim()){SFX.init().then(()=>{SFX.startSong();trackEvent('game_start',{owl_name:owlName.trim(),owl_color:OWL_COLORS[colorIdx]});setScreen("instructions");});}}} disabled={!owlName.trim()} style={{width:"100%",padding:14,background:owlName.trim()?"linear-gradient(90deg,#7C3AED,#6366F1)":"#4B5563",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:owlName.trim()?"pointer":"default"}}>🚀 Start Adventure!</button>
       </div>
     </div>
   );
