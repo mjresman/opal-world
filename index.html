@@ -1,0 +1,2064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Opal World</title>
+    <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }</style>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ---- SOUND ENGINE ---- */
+const SFX = {
+  _started: false,
+  async init() { if (this._started) return; await Tone.start(); this._started = true; },
+  fly() {
+    if (!this._started) return;
+    const s = new Tone.Synth({ oscillator:{type:"sine"}, envelope:{attack:0.01,decay:0.3,sustain:0.1,release:0.4} }).toDestination();
+    s.volume.value = -14; const n = Tone.now();
+    s.triggerAttackRelease("C5","16n",n); s.triggerAttackRelease("E5","16n",n+0.08); s.triggerAttackRelease("G5","16n",n+0.16);
+    setTimeout(()=>s.dispose(),1500);
+  },
+  earnBucks() {
+    if (!this._started) return;
+    const s = new Tone.Synth({ oscillator:{type:"triangle"}, envelope:{attack:0.01,decay:0.15,sustain:0.05,release:0.3} }).toDestination();
+    s.volume.value = -10; const n = Tone.now();
+    s.triggerAttackRelease("E5","32n",n); s.triggerAttackRelease("G5","32n",n+0.07);
+    s.triggerAttackRelease("B5","32n",n+0.14); s.triggerAttackRelease("E6","16n",n+0.21);
+    setTimeout(()=>s.dispose(),1500);
+  },
+  spendBucks() {
+    if (!this._started) return;
+    const s = new Tone.Synth({ oscillator:{type:"sine"}, envelope:{attack:0.01,decay:0.2,sustain:0.05,release:0.2} }).toDestination();
+    s.volume.value = -12; const n = Tone.now();
+    s.triggerAttackRelease("G4","32n",n); s.triggerAttackRelease("E4","32n",n+0.1); s.triggerAttackRelease("C4","16n",n+0.2);
+    setTimeout(()=>s.dispose(),1500);
+  },
+  startSong() {
+    if (!this._started) return;
+    const s = new Tone.PolySynth(Tone.Synth, { oscillator:{type:"triangle"}, envelope:{attack:0.02,decay:0.3,sustain:0.2,release:0.5} }).toDestination();
+    s.volume.value = -10;
+    const m = [["C4","E4"],["E4","G4"],["G4","C5"],["E5"],["D5"],["C5"],["E5"],["G5"],["F5"],["E5"],["D5"],["C5"],["E5","G5"],["G5","C6"]];
+    const n = Tone.now(); m.forEach((notes,i)=>s.triggerAttackRelease(notes,"8n",n+i*0.18));
+    setTimeout(()=>s.dispose(),5000);
+  }
+};
+
+const OWL_COLORS = ["#A78BFA","#F9A8D4","#6EE7B7","#FCD34D","#93C5FD","#FCA5A5"];
+
+const ISLANDS = [
+  { id:"home", name:"Home Island", emoji:"🏠", x:400, y:250, color:"#8B5CF6", r:50 },
+  { id:"school", name:"School Island", emoji:"🏫", x:130, y:140, color:"#3B82F6", r:42 },
+  { id:"engineering", name:"Engineering Isle", emoji:"🔧", x:670, y:140, color:"#F59E0B", r:42 },
+  { id:"grocery", name:"Shopping Island", emoji:"🛍️", x:100, y:380, color:"#10B981", r:42 },
+  { id:"airport", name:"Airport", emoji:"✈️", x:700, y:380, color:"#EF4444", r:42 },
+  { id:"bank", name:"Bank Island", emoji:"🏦", x:400, y:470, color:"#0EA5E9", r:42 },
+  { id:"hunting", name:"Hunting Grounds", emoji:"🌾", x:250, y:470, color:"#92400E", r:42 },
+];
+
+const ISLAND_BUILDINGS = {
+  home: [
+    { id:"house", name:"House", x:220, btype:"house" },
+    { id:"garden", name:"Garden", x:580, btype:"garden" },
+  ],
+  school: [
+    { id:"math_class", name:"Math Class", x:130, btype:"school" },
+    { id:"playground", name:"Playground", x:400, btype:"playground" },
+    { id:"library", name:"Library", x:670, btype:"library" },
+  ],
+  engineering: [
+    { id:"workshop", name:"Workshop", x:240, btype:"workshop" },
+    { id:"job_board", name:"Job Board", x:560, btype:"jobboard" },
+  ],
+  grocery: [
+    { id:"food_store", name:"Food Store", x:100, btype:"store_green" },
+    { id:"clothing", name:"Clothing", x:300, btype:"store_pink" },
+    { id:"supply", name:"Supplies", x:500, btype:"store_blue" },
+    { id:"pet_store", name:"Pet Store", x:700, btype:"pet_store" },
+  ],
+  airport: [
+    { id:"ticket_desk", name:"Tickets", x:200, btype:"terminal" },
+    { id:"owlton_gate", name:"Owlton DC", x:420, btype:"gate_purple" },
+    { id:"mountain_gate", name:"Mt. Owl", x:620, btype:"gate_teal" },
+  ],
+  bank: [
+    { id:"bank_lobby", name:"Bank Lobby", x:150, btype:"bank_main" },
+    { id:"budget_desk", name:"Budget Planner", x:400, btype:"bank_budget" },
+    { id:"giving_center", name:"Giving Center", x:650, btype:"bank_giving" },
+  ],
+  hunting: [
+    { id:"meadow_hunt", name:"Meadow", x:150, btype:"meadow" },
+    { id:"pond_hunt", name:"Pond", x:400, btype:"pond" },
+    { id:"forest_hunt", name:"Forest", x:650, btype:"forest" },
+  ],
+};
+
+const AIRPORT_DESTINATIONS = {
+  owlton: {
+    name:"Owlton DC", emoji:"🏛️", cost:10,
+    buildings: [
+      { id:"monument", name:"Owl Monument", x:130, btype:"monument" },
+      { id:"post_office", name:"Post Office", x:400, btype:"postoffice" },
+      { id:"hotel", name:"Hotel", x:670, btype:"hotel" },
+    ]
+  },
+  mountain: {
+    name:"Mount Owl", emoji:"🏔️", cost:8,
+    buildings: [
+      { id:"campsite", name:"Campsite", x:150, btype:"campsite" },
+      { id:"trail", name:"Trail", x:400, btype:"trail" },
+      { id:"ranger", name:"Ranger", x:650, btype:"ranger" },
+    ]
+  },
+};
+
+const GROCERY_ITEMS = {
+  food_store: [
+    { name:"Fresh Voles",emoji:"🐭",type:"need",price:2 },
+    { name:"Field Mice",emoji:"🐁",type:"need",price:2 },
+    { name:"Crickets",emoji:"🦗",type:"need",price:1 },
+    { name:"Fish",emoji:"🐟",type:"need",price:3 },
+    { name:"Worms",emoji:"🪱",type:"need",price:1 },
+    { name:"Fancy Squirrel",emoji:"🐿️",type:"want",price:5 },
+    { name:"Chocolate Beetles",emoji:"🍫",type:"want",price:4 },
+    { name:"Candied Moths",emoji:"🦋",type:"want",price:3 },
+  ],
+  clothing: [
+    { name:"Winter Coat",emoji:"🧥",type:"need",price:4 },{ name:"Shoes",emoji:"👟",type:"need",price:3 },
+    { name:"Fancy Hat",emoji:"🎩",type:"want",price:5 },{ name:"Sunglasses",emoji:"🕶️",type:"want",price:3 },
+    { name:"Scarf",emoji:"🧣",type:"need",price:2 },{ name:"Tiara",emoji:"👑",type:"want",price:6 },
+  ],
+  supply: [
+    { name:"Pencils",emoji:"✏️",type:"need",price:1 },{ name:"Notebook",emoji:"📓",type:"need",price:2 },
+    { name:"Backpack",emoji:"🎒",type:"need",price:3 },{ name:"Stickers",emoji:"⭐",type:"want",price:2 },
+    { name:"Glitter Pens",emoji:"✨",type:"want",price:3 },
+  ],
+};
+
+const PETS = [
+  { name:"Fluffwing", animal:"cat", bodyColor:"#F9A8D4", wingColor:"#FBCFE8", hairColor:"#EC4899", price:6, type:"want" },
+  { name:"Skypup", animal:"dog", bodyColor:"#93C5FD", wingColor:"#BFDBFE", hairColor:"#3B82F6", price:7, type:"want" },
+  { name:"Sparkle Bunny", animal:"bunny", bodyColor:"#FCD34D", wingColor:"#FDE68A", hairColor:"#F59E0B", price:5, type:"want" },
+  { name:"Mint Frog", animal:"frog", bodyColor:"#6EE7B7", wingColor:"#A7F3D0", hairColor:"#059669", price:4, type:"want" },
+  { name:"Lilac Fox", animal:"fox", bodyColor:"#C4B5FD", wingColor:"#DDD6FE", hairColor:"#7C3AED", price:8, type:"want" },
+  { name:"Coral Bird", animal:"bird", bodyColor:"#FCA5A5", wingColor:"#FECACA", hairColor:"#EF4444", price:5, type:"want" },
+];
+
+const OWL_FRIENDS = [
+  { name:"Oliver", color:"#93C5FD" },
+  { name:"Luna", color:"#F9A8D4" },
+  { name:"Hazel", color:"#FCD34D" },
+  { name:"Finn", color:"#6EE7B7" },
+];
+
+const ENG_PROJECTS = [
+  { name:"Birdhouse",emoji:"🏗️",price:5,desc:"For your garden" },
+  { name:"Flower Pot",emoji:"🪴",price:3,desc:"Grow flowers!" },
+  { name:"Bookshelf",emoji:"📚",price:4,desc:"For your house" },
+  { name:"Telescope",emoji:"🔭",price:8,desc:"See the stars!" },
+  { name:"Toy Robot",emoji:"🤖",price:7,desc:"A fun friend!" },
+  { name:"Weather Vane",emoji:"🌤️",price:6,desc:"For the garden" },
+];
+
+const WORK_JOBS = [
+  { name:"Deliver Mail",emoji:"📬",pay:3 },{ name:"Fix a Pipe",emoji:"🔧",pay:4 },
+  { name:"Paint a Wall",emoji:"🎨",pay:3 },{ name:"Build a Chair",emoji:"🪑",pay:5 },
+  { name:"Sort Recycling",emoji:"♻️",pay:3 },{ name:"Wash Windows",emoji:"🪟",pay:4 },
+  { name:"Chop Firewood",emoji:"🌳",pay:4 },
+];
+
+const MATH_OPS = [{op:"+",fn:(a,b)=>a+b},{op:"-",fn:(a,b)=>a-b},{op:"×",fn:(a,b)=>a*b},{op:"÷",fn:(a,b)=>a/b}];
+
+function genMathQ() {
+  const idx = Math.floor(Math.random()*4);
+  const op = MATH_OPS[idx].op, fn = MATH_OPS[idx].fn;
+  let a,b,ans;
+  if(op==="÷"){b=Math.floor(Math.random()*8)+2;ans=Math.floor(Math.random()*9)+1;a=b*ans;}
+  else if(op==="-"){a=Math.floor(Math.random()*9)+2;b=Math.floor(Math.random()*a)+1;ans=fn(a,b);}
+  else{a=Math.floor(Math.random()*9)+1;b=Math.floor(Math.random()*9)+1;ans=fn(a,b);}
+  let ch=[ans];
+  while(ch.length<4){let w=ans+Math.floor(Math.random()*7)-3;if(w!==ans&&w>=0&&!ch.includes(w))ch.push(w);}
+  ch.sort(()=>Math.random()-0.5);
+  return{a,b,op,ans,ch};
+}
+
+/* ---- OWL ---- */
+function Owl({x,y,size=60,color="#A78BFA",name="",isFlying=false,bob=0}) {
+  const s=size;
+  return (
+    <g transform={"translate("+(x-s/2)+","+(y-s/2+bob)+")"}>
+      <ellipse cx={s*0.15} cy={s*0.55} rx={s*0.18} ry={s*0.22} fill={color} opacity={0.8} transform={isFlying?"rotate(-20 "+(s*0.15)+" "+(s*0.55)+")":""} />
+      <ellipse cx={s*0.85} cy={s*0.55} rx={s*0.18} ry={s*0.22} fill={color} opacity={0.8} transform={isFlying?"rotate(20 "+(s*0.85)+" "+(s*0.55)+")":""} />
+      <ellipse cx={s/2} cy={s*0.6} rx={s*0.3} ry={s*0.35} fill={color}/>
+      <ellipse cx={s/2} cy={s*0.62} rx={s*0.25} ry={s*0.28} fill="#4C1D95" opacity={0.45}/>
+      <circle cx={s*0.5} cy={s*0.52} r={s*0.018} fill="#FCD34D"/>
+      <circle cx={s*0.5} cy={s*0.6} r={s*0.018} fill="#FCD34D"/>
+      <circle cx={s*0.5} cy={s*0.68} r={s*0.018} fill="#FCD34D"/>
+      <circle cx={s/2} cy={s*0.3} r={s*0.25} fill={color}/>
+      <rect x={s*0.3} y={s*0.02} width={s*0.4} height={s*0.14} rx={3} fill="#1E1B4B"/>
+      <rect x={s*0.22} y={s*0.13} width={s*0.56} height={s*0.045} rx={2} fill="#1E1B4B"/>
+      <rect x={s*0.35} y={s*0.11} width={s*0.3} height={s*0.025} fill="#7C3AED"/>
+      <polygon points={(s*0.3)+","+(s*0.15)+" "+(s*0.22)+","+(s*0.03)+" "+(s*0.38)+","+(s*0.1)} fill={color}/>
+      <polygon points={(s*0.7)+","+(s*0.15)+" "+(s*0.78)+","+(s*0.03)+" "+(s*0.62)+","+(s*0.1)} fill={color}/>
+      <circle cx={s*0.38} cy={s*0.28} r={s*0.1} fill="white"/><circle cx={s*0.62} cy={s*0.28} r={s*0.1} fill="white"/>
+      <circle cx={s*0.38} cy={s*0.28} r={s*0.055} fill="#1E1B4B"/><circle cx={s*0.62} cy={s*0.28} r={s*0.055} fill="#1E1B4B"/>
+      <circle cx={s*0.395} cy={s*0.265} r={s*0.02} fill="white"/><circle cx={s*0.635} cy={s*0.265} r={s*0.02} fill="white"/>
+      <polygon points={(s*0.45)+","+(s*0.34)+" "+(s/2)+","+(s*0.42)+" "+(s*0.55)+","+(s*0.34)} fill="#F59E0B"/>
+      <line x1={s*0.4} y1={s*0.9} x2={s*0.35} y2={s} stroke="#F59E0B" strokeWidth={2}/>
+      <line x1={s*0.4} y1={s*0.9} x2={s*0.45} y2={s} stroke="#F59E0B" strokeWidth={2}/>
+      <line x1={s*0.6} y1={s*0.9} x2={s*0.55} y2={s} stroke="#F59E0B" strokeWidth={2}/>
+      <line x1={s*0.6} y1={s*0.9} x2={s*0.65} y2={s} stroke="#F59E0B" strokeWidth={2}/>
+      {name && <text x={s/2} y={s+14} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#FCD34D">{name}</text>}
+    </g>
+  );
+}
+
+/* ---- PET drawing ---- */
+function PetSVG({pet, x, y, size}) {
+  const s = size || 40;
+  const bc = pet.bodyColor, wc = pet.wingColor, hc = pet.hairColor;
+  const a = pet.animal;
+
+  return (
+    <g transform={"translate("+(x-s/2)+","+(y-s/2)+")"}>
+      {/* Wings (all pets have wings) */}
+      <ellipse cx={s*0.1} cy={s*0.5} rx={s*0.14} ry={s*0.2} fill={wc} opacity={0.85} transform={"rotate(-15 "+(s*0.1)+" "+(s*0.5)+")"}/>
+      <ellipse cx={s*0.9} cy={s*0.5} rx={s*0.14} ry={s*0.2} fill={wc} opacity={0.85} transform={"rotate(15 "+(s*0.9)+" "+(s*0.5)+")"}/>
+      {/* Wing feather details */}
+      <ellipse cx={s*0.06} cy={s*0.45} rx={s*0.08} ry={s*0.12} fill={bc} opacity={0.4} transform={"rotate(-20 "+(s*0.06)+" "+(s*0.45)+")"}/>
+      <ellipse cx={s*0.94} cy={s*0.45} rx={s*0.08} ry={s*0.12} fill={bc} opacity={0.4} transform={"rotate(20 "+(s*0.94)+" "+(s*0.45)+")"}/>
+
+      {/* ---- CAT ---- */}
+      {a==="cat" && (<g>
+        {/* Body */}
+        <ellipse cx={s/2} cy={s*0.62} rx={s*0.26} ry={s*0.25} fill={bc}/>
+        {/* Tail */}
+        <path d={"M"+(s*0.74)+","+(s*0.7)+" Q"+(s*0.9)+","+(s*0.4)+" "+(s*0.82)+","+(s*0.3)} fill="none" stroke={bc} strokeWidth={s*0.06} strokeLinecap="round"/>
+        {/* Head */}
+        <circle cx={s/2} cy={s*0.35} r={s*0.2} fill={bc}/>
+        {/* Ears (pointy) */}
+        <polygon points={(s*0.32)+","+(s*0.22)+" "+(s*0.28)+","+(s*0.06)+" "+(s*0.42)+","+(s*0.18)} fill={bc}/>
+        <polygon points={(s*0.68)+","+(s*0.22)+" "+(s*0.72)+","+(s*0.06)+" "+(s*0.58)+","+(s*0.18)} fill={bc}/>
+        <polygon points={(s*0.34)+","+(s*0.22)+" "+(s*0.31)+","+(s*0.1)+" "+(s*0.4)+","+(s*0.2)} fill={hc} opacity={0.5}/>
+        <polygon points={(s*0.66)+","+(s*0.22)+" "+(s*0.69)+","+(s*0.1)+" "+(s*0.6)+","+(s*0.2)} fill={hc} opacity={0.5}/>
+        {/* Eyes */}
+        <ellipse cx={s*0.4} cy={s*0.33} rx={s*0.065} ry={s*0.07} fill="#BFDBFE"/>
+        <ellipse cx={s*0.6} cy={s*0.33} rx={s*0.065} ry={s*0.07} fill="#BFDBFE"/>
+        <ellipse cx={s*0.4} cy={s*0.33} rx={s*0.03} ry={s*0.055} fill="#1E1B4B"/>
+        <ellipse cx={s*0.6} cy={s*0.33} rx={s*0.03} ry={s*0.055} fill="#1E1B4B"/>
+        {/* Nose + whiskers */}
+        <ellipse cx={s/2} cy={s*0.4} rx={s*0.03} ry={s*0.02} fill={hc}/>
+        <line x1={s*0.3} y1={s*0.39} x2={s*0.44} y2={s*0.4} stroke={hc} strokeWidth={0.8} opacity={0.5}/>
+        <line x1={s*0.3} y1={s*0.42} x2={s*0.44} y2={s*0.42} stroke={hc} strokeWidth={0.8} opacity={0.5}/>
+        <line x1={s*0.7} y1={s*0.39} x2={s*0.56} y2={s*0.4} stroke={hc} strokeWidth={0.8} opacity={0.5}/>
+        <line x1={s*0.7} y1={s*0.42} x2={s*0.56} y2={s*0.42} stroke={hc} strokeWidth={0.8} opacity={0.5}/>
+        {/* Paws */}
+        <ellipse cx={s*0.36} cy={s*0.86} rx={s*0.07} ry={s*0.04} fill={bc}/>
+        <ellipse cx={s*0.64} cy={s*0.86} rx={s*0.07} ry={s*0.04} fill={bc}/>
+      </g>)}
+
+      {/* ---- DOG ---- */}
+      {a==="dog" && (<g>
+        {/* Body */}
+        <ellipse cx={s/2} cy={s*0.62} rx={s*0.28} ry={s*0.24} fill={bc}/>
+        {/* Tail (wagging up) */}
+        <path d={"M"+(s*0.75)+","+(s*0.55)+" Q"+(s*0.88)+","+(s*0.35)+" "+(s*0.82)+","+(s*0.25)} fill="none" stroke={bc} strokeWidth={s*0.07} strokeLinecap="round"/>
+        {/* Head */}
+        <circle cx={s/2} cy={s*0.35} r={s*0.21} fill={bc}/>
+        {/* Floppy ears */}
+        <ellipse cx={s*0.28} cy={s*0.35} rx={s*0.1} ry={s*0.16} fill={hc} transform={"rotate(-15 "+(s*0.28)+" "+(s*0.35)+")"}/>
+        <ellipse cx={s*0.72} cy={s*0.35} rx={s*0.1} ry={s*0.16} fill={hc} transform={"rotate(15 "+(s*0.72)+" "+(s*0.35)+")"}/>
+        {/* Snout */}
+        <ellipse cx={s/2} cy={s*0.42} rx={s*0.1} ry={s*0.07} fill={wc}/>
+        <ellipse cx={s/2} cy={s*0.39} rx={s*0.04} ry={s*0.03} fill="#1E1B4B"/>
+        {/* Eyes */}
+        <circle cx={s*0.4} cy={s*0.31} r={s*0.055} fill="white"/>
+        <circle cx={s*0.6} cy={s*0.31} r={s*0.055} fill="white"/>
+        <circle cx={s*0.4} cy={s*0.31} r={s*0.035} fill="#1E1B4B"/>
+        <circle cx={s*0.6} cy={s*0.31} r={s*0.035} fill="#1E1B4B"/>
+        {/* Tongue */}
+        <ellipse cx={s*0.52} cy={s*0.47} rx={s*0.03} ry={s*0.04} fill="#F472B6"/>
+        {/* Paws */}
+        <ellipse cx={s*0.35} cy={s*0.86} rx={s*0.08} ry={s*0.045} fill={bc}/>
+        <ellipse cx={s*0.65} cy={s*0.86} rx={s*0.08} ry={s*0.045} fill={bc}/>
+      </g>)}
+
+      {/* ---- BUNNY ---- */}
+      {a==="bunny" && (<g>
+        {/* Body */}
+        <ellipse cx={s/2} cy={s*0.63} rx={s*0.24} ry={s*0.24} fill={bc}/>
+        {/* Fluffy tail */}
+        <circle cx={s*0.76} cy={s*0.65} r={s*0.07} fill={wc}/>
+        {/* Head */}
+        <circle cx={s/2} cy={s*0.38} r={s*0.18} fill={bc}/>
+        {/* Long ears */}
+        <ellipse cx={s*0.38} cy={s*0.12} rx={s*0.06} ry={s*0.18} fill={bc}/>
+        <ellipse cx={s*0.62} cy={s*0.12} rx={s*0.06} ry={s*0.18} fill={bc}/>
+        <ellipse cx={s*0.38} cy={s*0.12} rx={s*0.035} ry={s*0.14} fill={hc} opacity={0.5}/>
+        <ellipse cx={s*0.62} cy={s*0.12} rx={s*0.035} ry={s*0.14} fill={hc} opacity={0.5}/>
+        {/* Eyes */}
+        <circle cx={s*0.42} cy={s*0.36} r={s*0.055} fill="white"/>
+        <circle cx={s*0.58} cy={s*0.36} r={s*0.055} fill="white"/>
+        <circle cx={s*0.42} cy={s*0.36} r={s*0.035} fill="#1E1B4B"/>
+        <circle cx={s*0.58} cy={s*0.36} r={s*0.035} fill="#1E1B4B"/>
+        {/* Nose + mouth */}
+        <ellipse cx={s/2} cy={s*0.42} rx={s*0.025} ry={s*0.018} fill={hc}/>
+        <path d={"M"+(s*0.47)+","+(s*0.44)+" Q"+(s/2)+","+(s*0.48)+" "+(s*0.53)+","+(s*0.44)} fill="none" stroke={hc} strokeWidth={0.8}/>
+        {/* Big back feet */}
+        <ellipse cx={s*0.36} cy={s*0.88} rx={s*0.09} ry={s*0.04} fill={bc}/>
+        <ellipse cx={s*0.64} cy={s*0.88} rx={s*0.09} ry={s*0.04} fill={bc}/>
+      </g>)}
+
+      {/* ---- FROG ---- */}
+      {a==="frog" && (<g>
+        {/* Body */}
+        <ellipse cx={s/2} cy={s*0.6} rx={s*0.28} ry={s*0.22} fill={bc}/>
+        {/* Belly */}
+        <ellipse cx={s/2} cy={s*0.63} rx={s*0.18} ry={s*0.14} fill={wc} opacity={0.6}/>
+        {/* Head (wide) */}
+        <ellipse cx={s/2} cy={s*0.36} rx={s*0.24} ry={s*0.17} fill={bc}/>
+        {/* Big bulgy eyes on top */}
+        <circle cx={s*0.34} cy={s*0.24} r={s*0.09} fill="white"/>
+        <circle cx={s*0.66} cy={s*0.24} r={s*0.09} fill="white"/>
+        <circle cx={s*0.34} cy={s*0.24} r={s*0.055} fill="#1E1B4B"/>
+        <circle cx={s*0.66} cy={s*0.24} r={s*0.055} fill="#1E1B4B"/>
+        <circle cx={s*0.35} cy={s*0.23} r={s*0.02} fill="white"/>
+        <circle cx={s*0.67} cy={s*0.23} r={s*0.02} fill="white"/>
+        {/* Wide mouth */}
+        <path d={"M"+(s*0.32)+","+(s*0.42)+" Q"+(s/2)+","+(s*0.48)+" "+(s*0.68)+","+(s*0.42)} fill="none" stroke={hc} strokeWidth={1.5}/>
+        {/* Back legs */}
+        <ellipse cx={s*0.26} cy={s*0.78} rx={s*0.1} ry={s*0.06} fill={bc} transform={"rotate(-20 "+(s*0.26)+" "+(s*0.78)+")"}/>
+        <ellipse cx={s*0.74} cy={s*0.78} rx={s*0.1} ry={s*0.06} fill={bc} transform={"rotate(20 "+(s*0.74)+" "+(s*0.78)+")"}/>
+        {/* Front feet */}
+        <ellipse cx={s*0.36} cy={s*0.82} rx={s*0.06} ry={s*0.03} fill={bc}/>
+        <ellipse cx={s*0.64} cy={s*0.82} rx={s*0.06} ry={s*0.03} fill={bc}/>
+      </g>)}
+
+      {/* ---- FOX ---- */}
+      {a==="fox" && (<g>
+        {/* Body */}
+        <ellipse cx={s/2} cy={s*0.62} rx={s*0.26} ry={s*0.24} fill={bc}/>
+        {/* Big bushy tail */}
+        <path d={"M"+(s*0.72)+","+(s*0.6)+" Q"+(s*0.95)+","+(s*0.3)+" "+(s*0.8)+","+(s*0.2)} fill="none" stroke={bc} strokeWidth={s*0.1} strokeLinecap="round"/>
+        <circle cx={s*0.8} cy={s*0.22} r={s*0.04} fill={wc}/>
+        {/* Head (pointy) */}
+        <circle cx={s/2} cy={s*0.35} r={s*0.2} fill={bc}/>
+        {/* Pointy ears */}
+        <polygon points={(s*0.32)+","+(s*0.22)+" "+(s*0.26)+","+(s*0.04)+" "+(s*0.42)+","+(s*0.16)} fill={bc}/>
+        <polygon points={(s*0.68)+","+(s*0.22)+" "+(s*0.74)+","+(s*0.04)+" "+(s*0.58)+","+(s*0.16)} fill={bc}/>
+        <polygon points={(s*0.34)+","+(s*0.21)+" "+(s*0.3)+","+(s*0.1)+" "+(s*0.4)+","+(s*0.18)} fill="#1E1B4B" opacity={0.3}/>
+        <polygon points={(s*0.66)+","+(s*0.21)+" "+(s*0.7)+","+(s*0.1)+" "+(s*0.6)+","+(s*0.18)} fill="#1E1B4B" opacity={0.3}/>
+        {/* Snout */}
+        <ellipse cx={s/2} cy={s*0.42} rx={s*0.08} ry={s*0.05} fill={wc}/>
+        <ellipse cx={s/2} cy={s*0.39} rx={s*0.03} ry={s*0.02} fill="#1E1B4B"/>
+        {/* Eyes (sly) */}
+        <ellipse cx={s*0.4} cy={s*0.32} rx={s*0.055} ry={s*0.045} fill="white"/>
+        <ellipse cx={s*0.6} cy={s*0.32} rx={s*0.055} ry={s*0.045} fill="white"/>
+        <ellipse cx={s*0.4} cy={s*0.32} rx={s*0.03} ry={s*0.04} fill="#1E1B4B"/>
+        <ellipse cx={s*0.6} cy={s*0.32} rx={s*0.03} ry={s*0.04} fill="#1E1B4B"/>
+        {/* Paws */}
+        <ellipse cx={s*0.36} cy={s*0.86} rx={s*0.06} ry={s*0.035} fill={bc}/>
+        <ellipse cx={s*0.64} cy={s*0.86} rx={s*0.06} ry={s*0.035} fill={bc}/>
+      </g>)}
+
+      {/* ---- BIRD ---- */}
+      {a==="bird" && (<g>
+        {/* Body (round) */}
+        <ellipse cx={s/2} cy={s*0.58} rx={s*0.22} ry={s*0.25} fill={bc}/>
+        {/* Belly */}
+        <ellipse cx={s/2} cy={s*0.62} rx={s*0.14} ry={s*0.16} fill={wc} opacity={0.6}/>
+        {/* Tail feathers */}
+        <polygon points={(s*0.72)+","+(s*0.6)+" "+(s*0.9)+","+(s*0.5)+" "+(s*0.88)+","+(s*0.58)} fill={hc}/>
+        <polygon points={(s*0.72)+","+(s*0.62)+" "+(s*0.92)+","+(s*0.55)+" "+(s*0.88)+","+(s*0.63)} fill={bc} opacity={0.7}/>
+        {/* Head */}
+        <circle cx={s/2} cy={s*0.33} r={s*0.17} fill={bc}/>
+        {/* Small crest/tuft */}
+        <polygon points={(s*0.45)+","+(s*0.18)+" "+(s/2)+","+(s*0.05)+" "+(s*0.55)+","+(s*0.18)} fill={hc}/>
+        <polygon points={(s*0.42)+","+(s*0.2)+" "+(s*0.45)+","+(s*0.08)+" "+(s*0.5)+","+(s*0.2)} fill={hc} opacity={0.7}/>
+        {/* Beak */}
+        <polygon points={(s*0.44)+","+(s*0.35)+" "+(s*0.36)+","+(s*0.38)+" "+(s*0.44)+","+(s*0.41)} fill="#F59E0B"/>
+        {/* Eyes */}
+        <circle cx={s*0.46} cy={s*0.3} r={s*0.05} fill="white"/>
+        <circle cx={s*0.46} cy={s*0.3} r={s*0.03} fill="#1E1B4B"/>
+        {/* Thin legs + feet */}
+        <line x1={s*0.44} y1={s*0.8} x2={s*0.42} y2={s*0.9} stroke={hc} strokeWidth={1.5}/>
+        <line x1={s*0.56} y1={s*0.8} x2={s*0.58} y2={s*0.9} stroke={hc} strokeWidth={1.5}/>
+        <line x1={s*0.38} y1={s*0.9} x2={s*0.46} y2={s*0.9} stroke={hc} strokeWidth={1.2}/>
+        <line x1={s*0.54} y1={s*0.9} x2={s*0.62} y2={s*0.9} stroke={hc} strokeWidth={1.2}/>
+      </g>)}
+
+      {/* Fluffy hair clumps on head (all pets) */}
+      <circle cx={s*0.38} cy={s*0.14} r={s*0.06} fill={hc} opacity={0.8}/>
+      <circle cx={s*0.5} cy={s*0.1} r={s*0.07} fill={hc} opacity={0.9}/>
+      <circle cx={s*0.62} cy={s*0.14} r={s*0.06} fill={hc} opacity={0.8}/>
+    </g>
+  );
+}
+
+/* ---- 3D BUILDING ---- */
+function Building3D({x, btype, name, onClick}) {
+  const bx=x, by=240, w=100, h=90, d=30, roofH=40;
+  const colorMap = {
+    house:{wall:"#E8D5B7",side:"#D4BC94",roof:"#B45309",door:"#7C2D12",win:"#BFDBFE",accent:"#92400E"},
+    school:{wall:"#DBEAFE",side:"#93C5FD",roof:"#1E40AF",door:"#1E3A8A",win:"#FEF3C7",accent:"#2563EB"},
+    library:{wall:"#F5F3FF",side:"#C4B5FD",roof:"#5B21B6",door:"#4C1D95",win:"#FEF3C7",accent:"#7C3AED"},
+    workshop:{wall:"#FEF3C7",side:"#FCD34D",roof:"#92400E",door:"#78350F",win:"#DBEAFE",accent:"#B45309"},
+    jobboard:{wall:"#D1FAE5",side:"#6EE7B7",roof:"#065F46",door:"#064E3B",win:"#FEF3C7",accent:"#059669"},
+    store_green:{wall:"#D1FAE5",side:"#86EFAC",roof:"#166534",door:"#14532D",win:"#FEF3C7",accent:"#16A34A"},
+    store_pink:{wall:"#FCE7F3",side:"#F9A8D4",roof:"#9D174D",door:"#831843",win:"#DBEAFE",accent:"#DB2777"},
+    store_blue:{wall:"#CFFAFE",side:"#67E8F9",roof:"#155E75",door:"#164E63",win:"#FEF3C7",accent:"#0891B2"},
+    pet_store:{wall:"#FEF3C7",side:"#FBBF24",roof:"#92400E",door:"#78350F",win:"#DBEAFE",accent:"#D97706"},
+    terminal:{wall:"#FEE2E2",side:"#FCA5A5",roof:"#991B1B",door:"#7F1D1D",win:"#DBEAFE",accent:"#DC2626"},
+    gate_purple:{wall:"#EDE9FE",side:"#C4B5FD",roof:"#4338CA",door:"#3730A3",win:"#FEF3C7",accent:"#6366F1"},
+    gate_teal:{wall:"#CCFBF1",side:"#5EEAD4",roof:"#115E59",door:"#134E4A",win:"#FEF3C7",accent:"#0D9488"},
+    postoffice:{wall:"#FEE2E2",side:"#FCA5A5",roof:"#991B1B",door:"#7F1D1D",win:"#DBEAFE",accent:"#DC2626"},
+    hotel:{wall:"#EDE9FE",side:"#C4B5FD",roof:"#4338CA",door:"#3730A3",win:"#FEF3C7",accent:"#6366F1"},
+    ranger:{wall:"#FEF3C7",side:"#FCD34D",roof:"#78350F",door:"#451A03",win:"#D1FAE5",accent:"#92400E"},
+    bank_main:{wall:"#E0F2FE",side:"#7DD3FC",roof:"#0369A1",door:"#0C4A6E",win:"#FEF3C7",accent:"#0EA5E9"},
+    bank_budget:{wall:"#DBEAFE",side:"#93C5FD",roof:"#1D4ED8",door:"#1E3A8A",win:"#FEF3C7",accent:"#3B82F6"},
+    bank_giving:{wall:"#FCE7F3",side:"#F9A8D4",roof:"#BE185D",door:"#9D174D",win:"#FEF3C7",accent:"#EC4899"},
+  };
+
+  if(btype==="meadow") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        {/* Tall grass patches */}
+        <ellipse cx={bx} cy={by+15} rx={55} ry={18} fill="#86EFAC" opacity={0.5}/>
+        <path d={"M"+(bx-30)+","+(by+10)+" Q"+(bx-28)+","+(by-15)+" "+(bx-25)+","+(by-25)} fill="none" stroke="#22C55E" strokeWidth={3} strokeLinecap="round"/>
+        <path d={"M"+(bx-20)+","+(by+10)+" Q"+(bx-17)+","+(by-20)+" "+(bx-15)+","+(by-30)} fill="none" stroke="#16A34A" strokeWidth={3} strokeLinecap="round"/>
+        <path d={"M"+(bx-10)+","+(by+10)+" Q"+(bx-12)+","+(by-10)+" "+(bx-8)+","+(by-22)} fill="none" stroke="#4ADE80" strokeWidth={2.5} strokeLinecap="round"/>
+        <path d={"M"+(bx+5)+","+(by+10)+" Q"+(bx+3)+","+(by-18)+" "+(bx+7)+","+(by-28)} fill="none" stroke="#22C55E" strokeWidth={3} strokeLinecap="round"/>
+        <path d={"M"+(bx+18)+","+(by+10)+" Q"+(bx+20)+","+(by-12)+" "+(bx+15)+","+(by-24)} fill="none" stroke="#16A34A" strokeWidth={2.5} strokeLinecap="round"/>
+        <path d={"M"+(bx+30)+","+(by+10)+" Q"+(bx+28)+","+(by-15)+" "+(bx+32)+","+(by-20)} fill="none" stroke="#4ADE80" strokeWidth={3} strokeLinecap="round"/>
+        {/* Little mouse peeking out */}
+        <circle cx={bx+10} cy={by+5} r={5} fill="#D4A76A"/>
+        <circle cx={bx+12} cy={by+3} r={1.5} fill="#1E1B4B"/>
+        <text x={bx} y={by+50} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="pond") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        {/* Pond water */}
+        <ellipse cx={bx} cy={by+5} rx={50} ry={25} fill="#7DD3FC"/>
+        <ellipse cx={bx} cy={by+2} rx={45} ry={20} fill="#BAE6FD" opacity={0.5}/>
+        {/* Ripples */}
+        <ellipse cx={bx-10} cy={by} rx={12} ry={4} fill="none" stroke="white" strokeWidth={1} opacity={0.4}/>
+        <ellipse cx={bx+15} cy={by+8} rx={8} ry={3} fill="none" stroke="white" strokeWidth={1} opacity={0.3}/>
+        {/* Reeds */}
+        <line x1={bx-40} y1={by+20} x2={bx-42} y2={by-15} stroke="#16A34A" strokeWidth={2.5}/>
+        <ellipse cx={bx-43} cy={by-17} rx={3} ry={6} fill="#92400E"/>
+        <line x1={bx+40} y1={by+20} x2={bx+38} y2={by-10} stroke="#16A34A" strokeWidth={2.5}/>
+        <ellipse cx={bx+37} cy={by-12} rx={3} ry={6} fill="#92400E"/>
+        {/* Fish jumping */}
+        <path d={"M"+(bx+8)+","+(by-5)+" Q"+(bx+12)+","+(by-15)+" "+(bx+16)+","+(by-5)} fill="none" stroke="#0EA5E9" strokeWidth={1.5}/>
+        <text x={bx+12} y={by-10} textAnchor="middle" fontSize="10">🐟</text>
+        <text x={bx} y={by+50} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="forest") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        {/* Trees */}
+        <rect x={bx-30} y={by-30} width={7} height={50} fill="#78350F"/>
+        <circle cx={bx-26} cy={by-35} r={18} fill="#166534"/>
+        <circle cx={bx-34} cy={by-28} r={12} fill="#22C55E"/>
+        <rect x={bx+5} y={by-40} width={7} height={55} fill="#78350F"/>
+        <circle cx={bx+9} cy={by-45} r={20} fill="#15803D"/>
+        <circle cx={bx+18} cy={by-38} r={13} fill="#22C55E"/>
+        <rect x={bx+30} y={by-25} width={6} height={42} fill="#78350F"/>
+        <circle cx={bx+33} cy={by-30} r={15} fill="#166534"/>
+        {/* Squirrel on branch */}
+        <text x={bx+25} y={by-38} fontSize="12">🐿️</text>
+        {/* Ground brush */}
+        <ellipse cx={bx} cy={by+18} rx={50} ry={10} fill="#166534" opacity={0.3}/>
+        <text x={bx} y={by+50} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="garden") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        <rect x={bx-42} y={by-3} width={84} height={5} rx={2} fill="#B8860B"/>
+        <rect x={bx-42} y={by+10} width={84} height={5} rx={2} fill="#B8860B"/>
+        <rect x={bx-40} y={by-10} width={6} height={30} rx={2} fill="#D4A76A"/>
+        <rect x={bx-20} y={by-10} width={6} height={30} rx={2} fill="#D4A76A"/>
+        <rect x={bx} y={by-10} width={6} height={30} rx={2} fill="#D4A76A"/>
+        <rect x={bx+20} y={by-10} width={6} height={30} rx={2} fill="#D4A76A"/>
+        <rect x={bx+36} y={by-10} width={6} height={30} rx={2} fill="#D4A76A"/>
+        <line x1={bx-25} y1={by+18} x2={bx-25} y2={by+35} stroke="#16A34A" strokeWidth={2}/>
+        <circle cx={bx-25} cy={by+16} r={7} fill="#F472B6"/><circle cx={bx-25} cy={by+16} r={3} fill="#FCD34D"/>
+        <line x1={bx} y1={by+18} x2={bx} y2={by+35} stroke="#16A34A" strokeWidth={2}/>
+        <circle cx={bx} cy={by+16} r={7} fill="#FBBF24"/><circle cx={bx} cy={by+16} r={3} fill="#FCD34D"/>
+        <line x1={bx+25} y1={by+18} x2={bx+25} y2={by+35} stroke="#16A34A" strokeWidth={2}/>
+        <circle cx={bx+25} cy={by+16} r={7} fill="#A78BFA"/><circle cx={bx+25} cy={by+16} r={3} fill="#FCD34D"/>
+        <rect x={bx+35} y={by-25} width={8} height={45} fill="#92400E"/>
+        <circle cx={bx+39} cy={by-30} r={20} fill="#22C55E"/>
+        <circle cx={bx+30} cy={by-22} r={14} fill="#16A34A"/>
+        <circle cx={bx+48} cy={by-22} r={14} fill="#4ADE80"/>
+        <text x={bx} y={by+58} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="playground") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        <line x1={bx-30} y1={by-50} x2={bx-30} y2={by+20} stroke="#6B7280" strokeWidth={4}/>
+        <line x1={bx+30} y1={by-50} x2={bx+30} y2={by+20} stroke="#6B7280" strokeWidth={4}/>
+        <line x1={bx-32} y1={by-48} x2={bx+32} y2={by-48} stroke="#6B7280" strokeWidth={4}/>
+        <line x1={bx-10} y1={by-46} x2={bx-14} y2={by} stroke="#92400E" strokeWidth={2}/>
+        <line x1={bx+10} y1={by-46} x2={bx+6} y2={by} stroke="#92400E" strokeWidth={2}/>
+        <rect x={bx-20} y={by-2} width={12} height={4} rx={2} fill="#EF4444"/>
+        <rect x={bx} y={by-5} width={12} height={4} rx={2} fill="#3B82F6"/>
+        <line x1={bx+45} y1={by-40} x2={bx+45} y2={by+20} stroke="#6B7280" strokeWidth={3}/>
+        <line x1={bx+45} y1={by-38} x2={bx+75} y2={by+15} stroke="#FBBF24" strokeWidth={5} strokeLinecap="round"/>
+        <rect x={bx+42} y={by-42} width={8} height={6} rx={1} fill="#6B7280"/>
+        <text x={bx} y={by+58} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="monument") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        <rect x={bx-25} y={by+10} width={50} height={15} rx={3} fill="#9CA3AF"/>
+        <rect x={bx-20} y={by-5} width={40} height={18} rx={2} fill="#B4B9C2"/>
+        <rect x={bx-12} y={by-70} width={24} height={68} fill="#D1D5DB"/>
+        {/* Owl statue */}
+        <ellipse cx={bx} cy={by-80} rx={16} ry={14} fill="#A0AEC0"/>
+        <circle cx={bx} cy={by-90} r={12} fill="#A0AEC0"/>
+        <circle cx={bx-4} cy={by-92} r={3} fill="#FCD34D"/>
+        <circle cx={bx+4} cy={by-92} r={3} fill="#FCD34D"/>
+        <polygon points={(bx-2)+","+(by-88)+" "+bx+","+(by-84)+" "+(bx+2)+","+(by-88)} fill="#F59E0B"/>
+        <polygon points={(bx-6)+","+(by-100)+" "+(bx-10)+","+(by-108)+" "+(bx-2)+","+(by-98)} fill="#A0AEC0"/>
+        <polygon points={(bx+6)+","+(by-100)+" "+(bx+10)+","+(by-108)+" "+(bx+2)+","+(by-98)} fill="#A0AEC0"/>
+        <ellipse cx={bx-14} cy={by-82} rx={6} ry={10} fill="#A0AEC0" opacity={0.7}/>
+        <ellipse cx={bx+14} cy={by-82} rx={6} ry={10} fill="#A0AEC0" opacity={0.7}/>
+        <text x={bx} y={by+45} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="campsite") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        <polygon points={(bx-35)+","+(by+20)+" "+bx+","+(by-35)+" "+(bx+35)+","+(by+20)} fill="#EF4444"/>
+        <polygon points={(bx-30)+","+(by+20)+" "+bx+","+(by-28)+" "+(bx+30)+","+(by+20)} fill="#FCA5A5"/>
+        <polygon points={(bx-10)+","+(by+20)+" "+bx+","+(by-5)+" "+(bx+10)+","+(by+20)} fill="#1E1B4B" opacity={0.7}/>
+        <circle cx={bx+45} cy={by+15} r={10} fill="#92400E" opacity={0.4}/>
+        <text x={bx+45} y={by+20} textAnchor="middle" fontSize="16">🔥</text>
+        <text x={bx} y={by+58} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  if(btype==="trail") {
+    return (
+      <g onClick={onClick} style={{cursor:"pointer"}}>
+        <path d={"M"+(bx-40)+","+(by+25)+" Q"+(bx-20)+","+by+" "+bx+","+(by+10)+" Q"+(bx+20)+","+(by+20)+" "+(bx+30)+","+(by-10)+" L"+(bx+40)+","+(by-30)}
+          fill="none" stroke="#D4A76A" strokeWidth={8} strokeLinecap="round" strokeDasharray="12,6"/>
+        <rect x={bx-35} y={by-25} width={6} height={30} fill="#78350F"/>
+        <circle cx={bx-32} cy={by-30} r={14} fill="#22C55E"/>
+        <rect x={bx+30} y={by-40} width={6} height={35} fill="#78350F"/>
+        <circle cx={bx+33} cy={by-45} r={16} fill="#16A34A"/>
+        <text x={bx} y={by+58} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+      </g>
+    );
+  }
+
+  const c = colorMap[btype] || {wall:"#E5E7EB",side:"#D1D5DB",roof:"#4B5563",door:"#374151",win:"#DBEAFE",accent:"#6B7280"};
+
+  return (
+    <g onClick={onClick} style={{cursor:"pointer"}}>
+      <ellipse cx={bx} cy={by+28} rx={w/2+10} ry={10} fill="rgba(0,0,0,0.15)"/>
+      <polygon points={(bx+w/2)+","+(by-h)+" "+(bx+w/2+d)+","+(by-h+d*0.6)+" "+(bx+w/2+d)+","+(by+d*0.6)+" "+(bx+w/2)+","+by} fill={c.side}/>
+      <rect x={bx-w/2} y={by-h} width={w} height={h} fill={c.wall} rx={2}/>
+      <rect x={bx-w/2} y={by-h} width={w} height={h} fill="none" stroke={c.accent} strokeWidth={1.5} rx={2} opacity={0.4}/>
+      <polygon points={(bx-w/2-8)+","+(by-h)+" "+bx+","+(by-h-roofH)+" "+(bx+w/2+8)+","+(by-h)} fill={c.roof}/>
+      <polygon points={(bx+w/2+8)+","+(by-h)+" "+bx+","+(by-h-roofH)+" "+(bx+d)+","+(by-h-roofH+d*0.5)+" "+(bx+w/2+8+d)+","+(by-h+d*0.6)} fill={c.roof} opacity={0.7}/>
+      <rect x={bx-10} y={by-35} width={20} height={35} rx={10} fill={c.door}/>
+      <circle cx={bx+6} cy={by-18} r={2} fill="#FCD34D"/>
+      <rect x={bx-w/2+10} y={by-h+18} width={18} height={16} rx={2} fill={c.win} stroke={c.accent} strokeWidth={1} opacity={0.8}/>
+      <rect x={bx+w/2-28} y={by-h+18} width={18} height={16} rx={2} fill={c.win} stroke={c.accent} strokeWidth={1} opacity={0.8}/>
+      {btype==="pet_store" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="18">🐾</text>}
+      {btype==="hotel" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🏨</text>}
+      {btype==="bank_main" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🏦</text>}
+      {btype==="bank_budget" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">📊</text>}
+      {btype==="bank_giving" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">💝</text>}
+      <rect x={bx-30} y={by-h-roofH+4} width={60} height={14} rx={4} fill="white" opacity={0.85}/>
+      <text x={bx} y={by-h-roofH+14} textAnchor="middle" fontSize="9" fill={c.accent} fontWeight="bold">{name}</text>
+      <text x={bx} y={by+48} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
+    </g>
+  );
+}
+
+/* ---- MODAL WRAPPER ---- */
+function ModalWrap({title,emoji,onClose,color,children}) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:10}}>
+      <div style={{background:"white",borderRadius:16,padding:20,maxWidth:440,width:"100%",boxShadow:"0 8px 32px rgba(0,0,0,0.3)",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <h2 style={{margin:0,color:color||"#1E1B4B",fontSize:18}}>{emoji} {title}</h2>
+          <button onClick={onClose} style={{background:"#EF4444",color:"white",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",fontWeight:"bold",fontSize:14}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function BucksBar({bucks}) {
+  return <div style={{background:"#FEF3C7",borderRadius:8,padding:6,textAlign:"center",marginBottom:10,fontWeight:"bold",color:"#92400E",fontSize:13}}>🪙 {bucks} Owl Bucks</div>;
+}
+
+/* ---- MATH CLASS ---- */
+function MathClassModal({bucks,onEarn,onClose}) {
+  const [q,setQ]=useState(()=>genMathQ());
+  const [fb,setFb]=useState(null);
+  const [earned,setEarned]=useState(0);
+  const [streak,setStreak]=useState(0);
+  function pick(v) {
+    if(fb)return;
+    if(v===q.ans){const bonus=streak>=2?3:2;setFb({ok:true,msg:"Correct! +"+bonus+" 🪙"+(streak>=2?" 🔥 Streak!":"")});setEarned(e=>e+bonus);setStreak(s=>s+1);onEarn(bonus);}
+    else{setFb({ok:false,msg:"Oops! "+q.a+" "+q.op+" "+q.b+" = "+q.ans});setStreak(0);}
+    setTimeout(()=>{setQ(genMathQ());setFb(null);},1600);
+  }
+  return (
+    <ModalWrap title="Math Class" emoji="🔢" color="#1E40AF" onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <div style={{background:"#DBEAFE",borderRadius:8,padding:6,textAlign:"center",marginBottom:8,fontSize:12,color:"#1E40AF"}}>Earned: 🪙 {earned} {streak>=2&&<span>| 🔥 {streak}</span>}</div>
+      <div style={{background:"#EFF6FF",borderRadius:12,padding:16,textAlign:"center",marginBottom:10}}>
+        <p style={{fontSize:13,color:"#6B7280",margin:"0 0 6px"}}>Solve:</p>
+        <p style={{fontSize:36,fontWeight:"bold",color:"#1E3A8A",margin:"0 0 14px"}}>{q.a} {q.op} {q.b} = ?</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxWidth:220,margin:"0 auto"}}>
+          {q.ch.map((c,i)=><button key={i} onClick={()=>pick(c)} style={{padding:10,fontSize:22,fontWeight:"bold",borderRadius:10,border:"2px solid #3B82F6",background:fb?(c===q.ans?"#86EFAC":"white"):"white",color:"#1E3A8A",cursor:fb?"default":"pointer"}}>{c}</button>)}
+        </div>
+      </div>
+      {fb&&<div style={{background:fb.ok?"#D1FAE5":"#FEE2E2",borderRadius:8,padding:8,textAlign:"center",fontWeight:"bold",color:fb.ok?"#065F46":"#991B1B",fontSize:13}}>{fb.ok?"🎉":"🤔"} {fb.msg}</div>}
+    </ModalWrap>
+  );
+}
+
+/* ---- PLAYGROUND with animations ---- */
+function PlaygroundModal({owlColor, onClose}) {
+  const [activity, setActivity] = useState(null);
+  const [frame, setFrame] = useState(0);
+  const [msg, setMsg] = useState("");
+  const timerRef = useRef(null);
+
+  function startActivity(act) {
+    setActivity(act);
+    setFrame(0);
+    setMsg("");
+    let f = 0;
+    timerRef.current = setInterval(() => {
+      f++;
+      setFrame(f);
+      if (f >= 30) {
+        clearInterval(timerRef.current);
+        setActivity(null);
+        if (act === "slide") setMsg("Whee! That was fun! 🛝");
+        if (act === "swing") setMsg("Flying high on the swings! 🎠");
+        if (act === "seesaw") setMsg("Up and down we go! ⚖️");
+      }
+    }, 80);
+  }
+
+  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+
+  function renderScene() {
+    if (activity === "slide") {
+      const progress = frame / 30;
+      const owlX = 120 + progress * 180;
+      const owlY = 60 + progress * 160;
+      return (
+        <svg viewBox="0 0 400 280" style={{width:"100%",background:"#E0F4FF",borderRadius:12}}>
+          <line x1={100} y1={40} x2={100} y2={240} stroke="#6B7280" strokeWidth={6}/>
+          <rect x={90} y={36} width={20} height={8} rx={2} fill="#6B7280"/>
+          <line x1={100} y1={50} x2={320} y2={230} stroke="#FBBF24" strokeWidth={10} strokeLinecap="round"/>
+          <Owl x={owlX} y={owlY} size={36} color={owlColor} isFlying={false}/>
+        </svg>
+      );
+    }
+    if (activity === "swing") {
+      const angle = Math.sin(frame * 0.4) * 30;
+      const radians = angle * Math.PI / 180;
+      const ropeLen = 100;
+      const owlX = 200 + Math.sin(radians) * ropeLen;
+      const owlY = 60 + Math.cos(radians) * ropeLen;
+      return (
+        <svg viewBox="0 0 400 280" style={{width:"100%",background:"#E0F4FF",borderRadius:12}}>
+          <line x1={130} y1={20} x2={130} y2={260} stroke="#6B7280" strokeWidth={6}/>
+          <line x1={270} y1={20} x2={270} y2={260} stroke="#6B7280" strokeWidth={6}/>
+          <line x1={126} y1={24} x2={274} y2={24} stroke="#6B7280" strokeWidth={6}/>
+          <line x1={200} y1={26} x2={owlX} y2={owlY-16} stroke="#92400E" strokeWidth={2}/>
+          <line x1={200} y1={26} x2={owlX} y2={owlY-16} stroke="#92400E" strokeWidth={2}/>
+          <rect x={owlX-12} y={owlY-14} width={24} height={6} rx={2} fill="#EF4444"/>
+          <Owl x={owlX} y={owlY+10} size={32} color={owlColor} isFlying={false}/>
+        </svg>
+      );
+    }
+    if (activity === "seesaw") {
+      const angle = Math.sin(frame * 0.3) * 15;
+      return (
+        <svg viewBox="0 0 400 280" style={{width:"100%",background:"#E0F4FF",borderRadius:12}}>
+          <polygon points="200,240 185,260 215,260" fill="#6B7280"/>
+          <line x1={80} y1={220-angle*2} x2={320} y2={220+angle*2} stroke="#92400E" strokeWidth={8} strokeLinecap="round"/>
+          <Owl x={110} y={195-angle*2} size={32} color={owlColor} isFlying={false}/>
+          <Owl x={290} y={195+angle*2} size={32} color="#93C5FD" isFlying={false}/>
+        </svg>
+      );
+    }
+    return null;
+  }
+
+  return (
+    <ModalWrap title="Playground" emoji="🎪" color="#B45309" onClose={onClose}>
+      {!activity && !msg && (
+        <div>
+          <p style={{color:"#6B7280",fontSize:13,textAlign:"center",margin:"0 0 12px"}}>Choose an activity!</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <button onClick={()=>startActivity("slide")} style={{padding:14,borderRadius:10,border:"2px solid #F59E0B",background:"#FFFBEB",cursor:"pointer",textAlign:"center"}}>
+              <div style={{fontSize:28}}>🛝</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#92400E"}}>Slide</div>
+            </button>
+            <button onClick={()=>startActivity("swing")} style={{padding:14,borderRadius:10,border:"2px solid #3B82F6",background:"#EFF6FF",cursor:"pointer",textAlign:"center"}}>
+              <div style={{fontSize:28}}>🎠</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#1E40AF"}}>Swing</div>
+            </button>
+            <button onClick={()=>startActivity("seesaw")} style={{padding:14,borderRadius:10,border:"2px solid #10B981",background:"#F0FDF4",cursor:"pointer",textAlign:"center"}}>
+              <div style={{fontSize:28}}>⚖️</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#065F46"}}>Seesaw</div>
+            </button>
+          </div>
+        </div>
+      )}
+      {activity && renderScene()}
+      {msg && (
+        <div style={{textAlign:"center"}}>
+          <p style={{fontSize:18,fontWeight:"bold",color:"#92400E",margin:"12px 0"}}>{msg}</p>
+          <button onClick={()=>setMsg("")} style={{padding:"8px 20px",background:"#F59E0B",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>Play Again!</button>
+        </div>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- LIBRARY ---- */
+function LibraryModal({onClose}) {
+  const [book, setBook] = useState(null);
+  const [page, setPage] = useState(0);
+
+  const books = [
+    {
+      title: "Wants & Needs", color: "#7C3AED", emoji: "📗",
+      pages: [
+        { t: "What is a NEED?", b: "A need is something you MUST have to live and be healthy. Things like food, water, a home, and clothes are all needs. Without them, you couldn't survive!", e: "💚" },
+        { t: "What is a WANT?", b: "A want is something nice to have, but you can live without it. Toys, candy, video games, and fancy clothes are all wants. They make life fun, but you don't need them to be healthy!", e: "⭐" },
+        { t: "How to Tell the Difference", b: "Ask yourself: Can I survive without this? If YES, it's a want. If NO, it's a need! For example, you NEED water, but you WANT soda pop.", e: "🤔" },
+        { t: "Quiz Yourself!", b: "Is a warm coat a want or a need? It's a NEED — it keeps you warm! Is a diamond tiara a want or a need? It's a WANT — it's pretty but you don't need it!", e: "✅" },
+      ]
+    },
+    {
+      title: "Smart Spending", color: "#2563EB", emoji: "📘",
+      pages: [
+        { t: "What is a Budget?", b: "A budget is a plan for your money. It helps you decide how to spend your Owl Bucks wisely. Smart owls always make a budget!", e: "🦉" },
+        { t: "Needs Come First!", b: "Always buy your needs before your wants. Make sure you have food, clothes, and a safe home before buying toys or treats.", e: "🏠" },
+        { t: "Saving is Smart", b: "You don't have to spend all your Owl Bucks right away! Saving some for later means you can buy something really special when you need it.", e: "🪙" },
+        { t: "Making Good Choices", b: "Before you buy something, ask: Do I really need this? Can I wait? Is there something more important I should buy first? These questions make you a super smart shopper!", e: "🧠" },
+      ]
+    },
+    {
+      title: "The Story of Opal", color: "#059669", emoji: "📙",
+      pages: [
+        { t: "How Opal Began", b: "Long ago, a group of wise owls discovered a beautiful floating gem in the sky. It sparkled with every color of the rainbow. They called it Opal!", e: "💎" },
+        { t: "Building a Home", b: "The owls worked together to build islands on Opal. They built a school to learn, shops to trade, and cozy homes for every owl family.", e: "🏗️" },
+        { t: "Owl Bucks Were Born", b: "The owls needed a way to trade fairly. So they created Owl Bucks! Owls earn them by working hard and learning at school.", e: "🪙" },
+        { t: "Opal Today", b: "Now Opal is a wonderful world where owls learn, work, play, and help each other. And the most important lesson every young owl learns is the difference between wants and needs!", e: "🌟" },
+      ]
+    }
+  ];
+
+  if (!book) {
+    return (
+      <ModalWrap title="Library" emoji="📚" color="#5B21B6" onClose={onClose}>
+        <p style={{color:"#6B7280",fontSize:13,textAlign:"center",margin:"0 0 12px"}}>Pick a book to read!</p>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {books.map((b, i) => (
+            <button key={i} onClick={() => { setBook(b); setPage(0); }} style={{
+              display:"flex",alignItems:"center",gap:12,padding:14,borderRadius:12,
+              border:"2px solid "+b.color,background:"white",cursor:"pointer",textAlign:"left"
+            }}>
+              <div style={{
+                width:50,height:65,borderRadius:6,background:b.color,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:24,flexShrink:0,boxShadow:"2px 2px 6px rgba(0,0,0,0.15)"
+              }}>
+                {b.emoji}
+              </div>
+              <div>
+                <div style={{fontWeight:"bold",fontSize:15,color:b.color}}>{b.title}</div>
+                <div style={{fontSize:11,color:"#6B7280"}}>{b.pages.length} pages</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </ModalWrap>
+    );
+  }
+
+  const pg = book.pages[page];
+
+  return (
+    <ModalWrap title={book.title} emoji={book.emoji} color={book.color} onClose={() => { setBook(null); setPage(0); }}>
+      {/* Book visual */}
+      <div style={{
+        background:"linear-gradient(135deg, #FFFBEB, #FEF3C7)",
+        borderRadius:12,padding:20,textAlign:"center",minHeight:160,
+        border:"2px solid #E5E7EB",
+        boxShadow:"inset 0 0 20px rgba(0,0,0,0.04), 2px 2px 8px rgba(0,0,0,0.08)",
+        position:"relative"
+      }}>
+        {/* Page curl effect */}
+        <div style={{
+          position:"absolute",top:0,right:0,width:20,height:20,
+          background:"linear-gradient(135deg, transparent 50%, #E5E7EB 50%)",
+          borderBottomLeftRadius:8
+        }}/>
+        <p style={{fontSize:36,margin:"0 0 8px"}}>{pg.e}</p>
+        <h3 style={{color:book.color,margin:"0 0 10px",fontSize:17}}>{pg.t}</h3>
+        <p style={{color:"#374151",fontSize:14,lineHeight:1.6,margin:0}}>{pg.b}</p>
+      </div>
+
+      {/* Page navigation */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
+        <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{
+          padding:"8px 18px",borderRadius:8,border:"none",
+          background:page===0?"#E5E7EB":book.color,color:"white",
+          cursor:page===0?"default":"pointer",fontWeight:"bold",fontSize:13
+        }}>← Back</button>
+
+        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+          {book.pages.map((_, i) => (
+            <div key={i} style={{
+              width:8,height:8,borderRadius:"50%",
+              background:i===page?book.color:"#D1D5DB",
+              transition:"background 0.3s"
+            }}/>
+          ))}
+        </div>
+
+        {page < book.pages.length - 1 ? (
+          <button onClick={() => setPage(p => p + 1)} style={{
+            padding:"8px 18px",borderRadius:8,border:"none",
+            background:book.color,color:"white",cursor:"pointer",
+            fontWeight:"bold",fontSize:13
+          }}>Next →</button>
+        ) : (
+          <button onClick={() => { setBook(null); setPage(0); }} style={{
+            padding:"8px 18px",borderRadius:8,border:"none",
+            background:"#10B981",color:"white",cursor:"pointer",
+            fontWeight:"bold",fontSize:13
+          }}>✓ Done!</button>
+        )}
+      </div>
+
+      <p style={{textAlign:"center",color:"#9CA3AF",fontSize:11,marginTop:8}}>
+        Page {page + 1} of {book.pages.length}
+      </p>
+    </ModalWrap>
+  );
+}
+
+/* ---- SHOP ---- */
+function ShopModal({title,emoji,color,items,bucks,onBuy,inventory,onClose}) {
+  const [si,setSi]=useState(null);
+  const [fb,setFb]=useState(null);
+  function startSort(){setSi(items[Math.floor(Math.random()*items.length)]);setFb(null);}
+  function ansSort(a){
+    if(si.type===a) setFb({ok:true,msg:"Yes! "+si.emoji+" "+si.name+" is a "+a+"!"});
+    else setFb({ok:false,msg:"Hmm, "+si.emoji+" "+si.name+" is a "+si.type+"."});
+    setSi(null);
+  }
+  return (
+    <ModalWrap title={title} emoji={emoji} color={color} onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <button onClick={startSort} style={{width:"100%",padding:8,background:"#7C3AED",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:12,marginBottom:8}}>🧠 Want or Need?</button>
+      {si&&<div style={{background:"#F3E8FF",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}>
+        <p style={{fontSize:26,margin:"0 0 2px"}}>{si.emoji}</p>
+        <p style={{fontWeight:"bold",margin:"0 0 6px",color:"#4C1D95",fontSize:13}}>Is {si.name} a want or need?</p>
+        <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+          <button onClick={()=>ansSort("want")} style={{padding:"6px 16px",background:"#F59E0B",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>⭐ Want</button>
+          <button onClick={()=>ansSort("need")} style={{padding:"6px 16px",background:"#10B981",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>💚 Need</button>
+        </div></div>}
+      {fb&&<div style={{background:fb.ok?"#D1FAE5":"#FEE2E2",borderRadius:8,padding:6,marginBottom:8,textAlign:"center",fontWeight:"bold",color:fb.ok?"#065F46":"#991B1B",fontSize:12}}>{fb.ok?"🎉":"🤔"} {fb.msg}</div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+        {items.map((item,i)=>{const owned=inventory.includes(item.name);const ok=bucks>=item.price;
+          return <button key={i} onClick={()=>{if(!owned&&ok)onBuy(item);}} disabled={owned||!ok} style={{padding:7,borderRadius:8,border:"2px solid",borderColor:item.type==="need"?"#10B981":"#F59E0B",background:owned?"#E5E7EB":"white",cursor:(owned||!ok)?"default":"pointer",opacity:owned?0.6:ok?1:0.5,textAlign:"center"}}>
+            <div style={{fontSize:20}}>{item.emoji}</div><div style={{fontSize:10,fontWeight:"bold"}}>{item.name}</div>
+            <div style={{fontSize:9,color:item.type==="need"?"#059669":"#D97706"}}>{item.type==="need"?"💚 Need":"⭐ Want"}</div>
+            <div style={{fontSize:10,fontWeight:"bold",color:"#7C3AED"}}>{owned?"✓":"🪙"+item.price}</div>
+          </button>;
+        })}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- PET STORE ---- */
+function PetStoreModal({bucks, onBuy, ownedPets, onClose}) {
+  return (
+    <ModalWrap title="Pet Store" emoji="🐾" color="#D97706" onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <p style={{color:"#6B7280",fontSize:12,margin:"0 0 8px",textAlign:"center"}}>Adopt a winged friend! Pets are WANTS — make sure you have your NEEDS first!</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {PETS.map((pet,i)=>{
+          const owned = ownedPets.some(p => p.name === pet.name);
+          const ok = bucks >= pet.price;
+          return (
+            <button key={i} onClick={()=>{if(!owned&&ok) onBuy(pet);}} disabled={owned||!ok}
+              style={{padding:10,borderRadius:10,border:"2px solid "+pet.bodyColor,background:owned?"#E5E7EB":"white",cursor:(owned||!ok)?"default":"pointer",opacity:owned?0.6:ok?1:0.5,textAlign:"center"}}>
+              <svg viewBox="0 0 60 60" width="60" height="60"><PetSVG pet={pet} x={30} y={30} size={50}/></svg>
+              <div style={{fontSize:11,fontWeight:"bold",color:"#1F2937"}}>{pet.name}</div>
+              <div style={{fontSize:9,color:"#D97706"}}>⭐ Want</div>
+              <div style={{fontSize:10,fontWeight:"bold",color:"#7C3AED"}}>{owned?"✓ Adopted":"🪙"+pet.price}</div>
+            </button>
+          );
+        })}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- WORK / JOB BOARD ---- */
+function WorkModal({bucks,onEarn,onClose}) {
+  const [job,setJob]=useState(null);
+  const [step,setStep]=useState(0);
+  const [fb,setFb]=useState(null);
+  function pickJob(j){setJob(j);setStep(0);setFb(null);}
+  function doStep(){
+    if(step<2)setStep(s=>s+1);
+    else{setFb("Great work! +🪙 "+job.pay);onEarn(job.pay);setTimeout(()=>{setJob(null);setFb(null);setStep(0);},1200);}
+  }
+  if(!job) return (
+    <ModalWrap title="Job Board" emoji="📋" color="#065F46" onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {WORK_JOBS.map((j,i)=><button key={i} onClick={()=>pickJob(j)} style={{padding:10,borderRadius:8,border:"2px solid #10B981",background:"#F0FDF4",cursor:"pointer",textAlign:"center"}}>
+          <div style={{fontSize:22}}>{j.emoji}</div><div style={{fontSize:11,fontWeight:"bold",color:"#065F46"}}>{j.name}</div><div style={{fontSize:10,color:"#059669"}}>🪙 {j.pay}</div></button>)}
+      </div>
+    </ModalWrap>
+  );
+  return (
+    <ModalWrap title="Job Board" emoji="📋" color="#065F46" onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <div style={{textAlign:"center"}}>
+        <p style={{fontSize:32,margin:"0 0 4px"}}>{job.emoji}</p>
+        <h3 style={{color:"#065F46",margin:"0 0 10px"}}>{job.name}</h3>
+        <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:12}}>
+          {[0,1,2].map(i=><div key={i} style={{width:44,height:44,borderRadius:8,background:i<step?"#10B981":i===step?"#A7F3D0":"#E5E7EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{i<step?"✅":i===step?"🔨":"⬜"}</div>)}
+        </div>
+        {!fb&&<button onClick={doStep} style={{padding:"8px 28px",background:"#10B981",color:"white",border:"none",borderRadius:10,fontSize:15,fontWeight:"bold",cursor:"pointer"}}>{step<2?"🔨 Work!":"🔨 Finish!"}</button>}
+        {fb&&<div style={{background:"#D1FAE5",borderRadius:8,padding:8,fontWeight:"bold",color:"#065F46"}}>🎉 {fb}</div>}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- WORKSHOP ---- */
+function WorkshopModal({bucks,onBuild,builtItems,onClose}) {
+  return (
+    <ModalWrap title="Workshop" emoji="🔨" color="#92400E" onClose={onClose}>
+      <BucksBar bucks={bucks}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+        {ENG_PROJECTS.map((p,i)=>{const built=builtItems.includes(p.name);const ok=bucks>=p.price;
+          return <button key={i} onClick={()=>{if(!built&&ok) onBuild(p);}} disabled={built||!ok} style={{padding:8,borderRadius:8,border:"2px solid #D97706",background:built?"#E5E7EB":"white",cursor:(built||!ok)?"default":"pointer",opacity:built?0.6:ok?1:0.5,textAlign:"center"}}>
+            <div style={{fontSize:20}}>{p.emoji}</div><div style={{fontSize:10,fontWeight:"bold",color:"#92400E"}}>{p.name}</div>
+            <div style={{fontSize:9,color:"#6B7280"}}>{p.desc}</div><div style={{fontSize:10,fontWeight:"bold",color:"#7C3AED"}}>{built?"✓":"🪙"+p.price}</div>
+          </button>;
+        })}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- HOME ---- */
+function HomeModal({inventory,builtItems,pets,energy,onSleep,onClose}) {
+  const allItems = Object.values(GROCERY_ITEMS).flat();
+  return (
+    <ModalWrap title="Your House" emoji="🏡" color="#5B21B6" onClose={onClose}>
+      <div style={{display:"flex",gap:8,marginBottom:10}}>
+        <div style={{flex:1,background:"#EDE9FE",borderRadius:8,padding:8,textAlign:"center"}}>
+          <p style={{margin:"0 0 3px",fontSize:12,color:"#5B21B6",fontWeight:"bold"}}>⚡ Energy</p>
+          <div style={{background:"#DDD6FE",borderRadius:6,height:14,overflow:"hidden"}}>
+            <div style={{height:"100%",width:energy+"%",background:energy>30?"#8B5CF6":"#EF4444",borderRadius:6,transition:"width 0.5s"}}/></div></div>
+        <button onClick={onSleep} disabled={energy>=100} style={{padding:"8px 14px",background:energy>=100?"#D1D5DB":"#8B5CF6",color:"white",border:"none",borderRadius:8,cursor:energy>=100?"default":"pointer",fontWeight:"bold",fontSize:12}}>😴 Sleep</button>
+      </div>
+      {pets.length > 0 && (
+        <div>
+          <h3 style={{color:"#5B21B6",margin:"0 0 6px",fontSize:14}}>🐾 Your Pets</h3>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            {pets.map((pet,i)=>(
+              <div key={i} style={{background:"#FEF3C7",borderRadius:8,padding:6,textAlign:"center"}}>
+                <svg viewBox="0 0 40 40" width="40" height="40"><PetSVG pet={pet} x={20} y={20} size={34}/></svg>
+                <div style={{fontSize:9,fontWeight:"bold",color:"#92400E"}}>{pet.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <h3 style={{color:"#5B21B6",margin:"0 0 6px",fontSize:14}}>🎒 Your Items</h3>
+      <div style={{display:"flex",gap:3,flexWrap:"wrap",minHeight:30}}>
+        {inventory.length===0&&builtItems.length===0&&<p style={{color:"#9CA3AF",fontSize:11,margin:0}}>Nothing yet!</p>}
+        {inventory.map((n,i)=>{const it=allItems.find(x=>x.name===n);if(!it)return null;
+          return <span key={"i"+i} style={{background:it.type==="need"?"#D1FAE5":"#FEF3C7",borderRadius:6,padding:"2px 6px",fontSize:10}}>{it.emoji} {n}</span>;})}
+        {builtItems.map((n,i)=>{const p=ENG_PROJECTS.find(x=>x.name===n);if(!p)return null;
+          return <span key={"b"+i} style={{background:"#EDE9FE",borderRadius:6,padding:"2px 6px",fontSize:10}}>{p.emoji} {n}</span>;})}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- GARDEN ---- */
+function GardenModal({builtItems,onClose}) {
+  const gi=builtItems.filter(n=>{const p=ENG_PROJECTS.find(x=>x.name===n);return p&&(p.desc.includes("garden")||p.desc.includes("flower"));});
+  return (
+    <ModalWrap title="Garden" emoji="🌻" color="#16A34A" onClose={onClose}>
+      <div style={{background:"#F0FDF4",borderRadius:12,padding:16,textAlign:"center",minHeight:60}}>
+        {gi.length===0?<div><p style={{fontSize:36,margin:"0 0 8px"}}>🌱</p><p style={{color:"#6B7280",fontSize:13}}>Empty! Build items at the Workshop.</p></div>
+        :<div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>{gi.map((n,i)=>{const p=ENG_PROJECTS.find(x=>x.name===n);if(!p)return null;
+          return <div key={i} style={{background:"#DCFCE7",borderRadius:10,padding:10}}><div style={{fontSize:28}}>{p.emoji}</div><div style={{fontSize:11,fontWeight:"bold",color:"#065F46"}}>{p.name}</div></div>;})}</div>}
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- POST OFFICE ---- */
+function PostOfficeModal({inventory, onClose}) {
+  const [sent, setSent] = useState([]);
+  const [fb, setFb] = useState(null);
+  const allItems = Object.values(GROCERY_ITEMS).flat();
+
+  function sendItem(itemName, friend) {
+    setSent(s => [...s, { item: itemName, to: friend.name }]);
+    setFb("Sent " + itemName + " to " + friend.name + "! 📬 They say thank you!");
+    setTimeout(() => setFb(null), 3000);
+  }
+
+  const sendableItems = inventory.filter(n => !sent.some(s => s.item === n));
+
+  return (
+    <ModalWrap title="Post Office" emoji="📮" color="#DC2626" onClose={onClose}>
+      <p style={{color:"#6B7280",fontSize:12,margin:"0 0 10px",textAlign:"center"}}>Send items to your owl friends!</p>
+      {fb && <div style={{background:"#D1FAE5",borderRadius:8,padding:8,marginBottom:8,textAlign:"center",fontWeight:"bold",color:"#065F46",fontSize:13}}>🎉 {fb}</div>}
+      {sendableItems.length === 0 ? (
+        <p style={{color:"#9CA3AF",fontSize:12,textAlign:"center"}}>You don't have any items to send! Go shopping first.</p>
+      ) : (
+        <div>
+          <p style={{fontSize:12,fontWeight:"bold",color:"#991B1B",margin:"0 0 6px"}}>Pick an item to send:</p>
+          {sendableItems.map((itemName, i) => {
+            const it = allItems.find(x => x.name === itemName);
+            return (
+              <div key={i} style={{background:"#FEF2F2",borderRadius:8,padding:8,marginBottom:6}}>
+                <div style={{fontSize:13,fontWeight:"bold",marginBottom:6}}>{it ? it.emoji : "📦"} {itemName}</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {OWL_FRIENDS.map((f, fi) => (
+                    <button key={fi} onClick={() => sendItem(itemName, f)} style={{
+                      padding:"4px 10px",borderRadius:6,border:"1px solid "+f.color,background:"white",
+                      cursor:"pointer",fontSize:11,fontWeight:"bold",color:"#374151"
+                    }}>Send to {f.name}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- HOTEL (day/night animation) ---- */
+function HotelModal({energy, onSleep, onClose}) {
+  const [animating, setAnimating] = useState(false);
+  const [phase, setPhase] = useState(0); // 0-100
+  const timerRef = useRef(null);
+
+  function checkIn() {
+    setAnimating(true);
+    setPhase(0);
+    let p = 0;
+    timerRef.current = setInterval(() => {
+      p += 1;
+      setPhase(p);
+      if (p >= 100) {
+        clearInterval(timerRef.current);
+        onSleep();
+        setTimeout(() => { setAnimating(false); setPhase(0); }, 500);
+      }
+    }, 60);
+  }
+
+  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+
+  // Sky color transitions: day(0-20) -> sunset(20-35) -> night(35-65) -> sunrise(65-80) -> day(80-100)
+  function getSkyColor() {
+    if (phase < 20) return "#87CEEB";
+    if (phase < 35) { const t = (phase - 20) / 15; return lerpColor("#87CEEB", "#1E1B4B", t); }
+    if (phase < 65) return "#0F172A";
+    if (phase < 80) { const t = (phase - 65) / 15; return lerpColor("#0F172A", "#FDE68A", t); }
+    if (phase < 90) { const t = (phase - 80) / 10; return lerpColor("#FDE68A", "#87CEEB", t); }
+    return "#87CEEB";
+  }
+
+  function lerpColor(a, b, t) {
+    const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+    const ar = (ah >> 16) & 0xff, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+    const br = (bh >> 16) & 0xff, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+    const rr = Math.round(ar + (br - ar) * t), rg = Math.round(ag + (bg - ag) * t), rb = Math.round(ab + (bb - ab) * t);
+    return "#" + ((1 << 24) + (rr << 16) + (rg << 8) + rb).toString(16).slice(1);
+  }
+
+  const sunY = phase < 50 ? 60 + phase * 4 : 260 - (phase - 50) * 4;
+  const moonY = phase < 50 ? 260 - phase * 4 : 60 + (phase - 50) * 4;
+  const showMoon = phase > 25 && phase < 75;
+  const showSun = phase < 30 || phase > 70;
+  const showStars = phase > 30 && phase < 70;
+  const nightOverlay = phase > 20 && phase < 80 ? Math.min(0.6, Math.sin((phase - 20) / 60 * Math.PI) * 0.6) : 0;
+
+  return (
+    <ModalWrap title="Hotel" emoji="🏨" color="#4338CA" onClose={onClose}>
+      {!animating ? (
+        <div style={{textAlign:"center",padding:10}}>
+          <p style={{fontSize:48,margin:"0 0 8px"}}>🏨</p>
+          <p style={{color:"#6B7280",fontSize:14,margin:"0 0 4px"}}>Welcome to the Owlton Grand Hotel!</p>
+          <p style={{color:"#9CA3AF",fontSize:12,margin:"0 0 12px"}}>⚡ Energy: {energy}%</p>
+          <button onClick={checkIn} disabled={energy >= 100} style={{
+            padding:"10px 24px",background:energy>=100?"#D1D5DB":"#4338CA",color:"white",
+            border:"none",borderRadius:10,fontWeight:"bold",fontSize:14,cursor:energy>=100?"default":"pointer"
+          }}>{energy >= 100 ? "Fully rested!" : "😴 Check In & Sleep"}</button>
+        </div>
+      ) : (
+        <svg viewBox="0 0 400 250" style={{width:"100%",borderRadius:12,overflow:"hidden"}}>
+          <rect width="400" height="250" fill={getSkyColor()} />
+          {/* Stars */}
+          {showStars && [
+            {x:50,y:30},{x:120,y:50},{x:200,y:20},{x:280,y:45},{x:350,y:25},
+            {x:80,y:80},{x:170,y:70},{x:250,y:60},{x:320,y:75},{x:30,y:60}
+          ].map((st,i) => (
+            <circle key={i} cx={st.x} cy={st.y} r={2} fill="white" opacity={Math.min(1, (phase > 35 ? (phase < 65 ? 0.8 : Math.max(0, 1 - (phase-65)/10)) : Math.min(1,(phase-30)/5)))} />
+          ))}
+          {/* Sun */}
+          {showSun && <circle cx={320} cy={sunY} r={25} fill="#FCD34D" opacity={phase < 25 ? 1 : phase > 75 ? 1 : Math.max(0, 1 - (phase - 25) / 10)} />}
+          {/* Moon */}
+          {showMoon && <circle cx={80} cy={moonY} r={20} fill="#F3F4F6" opacity={Math.min(1, phase > 35 && phase < 65 ? 0.9 : 0.4)} />}
+          {/* Night overlay */}
+          <rect width="400" height="250" fill={"rgba(15,23,42," + nightOverlay + ")"} />
+          {/* Ground */}
+          <rect x={0} y={180} width={400} height={70} fill="#22C55E" />
+          {/* Hotel building */}
+          <rect x={140} y={100} width={120} height={80} fill="#C4B5FD" />
+          <rect x={135} y={95} width={130} height={10} fill="#4338CA" />
+          <rect x={175} y={145} width={20} height={35} rx={8} fill="#3730A3" />
+          <rect x={150} y={110} width={16} height={14} rx={2} fill={nightOverlay > 0.3 ? "#FCD34D" : "#BFDBFE"} />
+          <rect x={192} y={110} width={16} height={14} rx={2} fill={nightOverlay > 0.3 ? "#FCD34D" : "#BFDBFE"} />
+          <rect x={234} y={110} width={16} height={14} rx={2} fill={nightOverlay > 0.3 ? "#FCD34D" : "#BFDBFE"} />
+          <text x={200} y={88} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">HOTEL</text>
+          {/* Zzz */}
+          {phase > 35 && phase < 70 && (
+            <g>
+              <text x={270} y={115} fontSize="16" fill="white" opacity={0.7}>z</text>
+              <text x={285} y={100} fontSize="20" fill="white" opacity={0.5}>z</text>
+              <text x={300} y={82} fontSize="24" fill="white" opacity={0.3}>z</text>
+            </g>
+          )}
+        </svg>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- BANK LOBBY ---- */
+function BankLobbyModal({bucks, savings, onDeposit, onWithdraw, onClose}) {
+  const [amount, setAmount] = useState(1);
+  const [target, setTarget] = useState("spending");
+  const [fb, setFb] = useState(null);
+  const total = savings.spending + savings.giving + savings.future;
+
+  function doDeposit() {
+    if (amount > bucks || amount < 1) return;
+    onDeposit(target, amount);
+    setFb("Deposited 🪙" + amount + " into " + target + "!");
+    setTimeout(() => setFb(null), 2000);
+  }
+
+  function doWithdraw() {
+    if (amount > savings[target] || amount < 1) return;
+    onWithdraw(target, amount);
+    setFb("Withdrew 🪙" + amount + " from " + target + "!");
+    setTimeout(() => setFb(null), 2000);
+  }
+
+  const catLabel = { spending: "🛒 Spending", giving: "💝 Giving", future: "🎓 Future" };
+  const catColor = { spending: "#10B981", giving: "#EC4899", future: "#0EA5E9" };
+
+  return (
+    <ModalWrap title="Opal Bank" emoji="🏦" color="#0EA5E9" onClose={onClose}>
+      <div style={{background:"#E0F2FE",borderRadius:10,padding:12,marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{fontWeight:"bold",color:"#0369A1",fontSize:14}}>🪙 Wallet: {bucks}</span>
+          <span style={{fontWeight:"bold",color:"#0369A1",fontSize:14}}>🏦 Saved: {total}</span>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {["spending","giving","future"].map(cat => (
+            <div key={cat} style={{flex:1,background:"white",borderRadius:8,padding:8,textAlign:"center",border:"2px solid "+catColor[cat]}}>
+              <div style={{fontSize:11,fontWeight:"bold",color:catColor[cat]}}>{catLabel[cat]}</div>
+              <div style={{fontSize:18,fontWeight:"bold",color:"#1E1B4B"}}>🪙{savings[cat]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{background:"#F0F9FF",borderRadius:10,padding:12,marginBottom:8}}>
+        <p style={{fontSize:12,fontWeight:"bold",color:"#0369A1",margin:"0 0 8px"}}>Choose account:</p>
+        <div style={{display:"flex",gap:4,marginBottom:10}}>
+          {["spending","giving","future"].map(cat => (
+            <button key={cat} onClick={() => setTarget(cat)} style={{
+              flex:1,padding:"6px 4px",borderRadius:8,border:"2px solid "+(target===cat?catColor[cat]:"#E5E7EB"),
+              background:target===cat?catColor[cat]:"white",
+              color:target===cat?"white":catColor[cat],
+              cursor:"pointer",fontWeight:"bold",fontSize:11
+            }}>{catLabel[cat]}</button>
+          ))}
+        </div>
+
+        <p style={{fontSize:12,fontWeight:"bold",color:"#0369A1",margin:"0 0 6px"}}>Amount:</p>
+        <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10}}>
+          <button onClick={() => setAmount(a => Math.max(1, a - 1))} style={{width:32,height:32,borderRadius:8,border:"none",background:"#0EA5E9",color:"white",fontWeight:"bold",fontSize:16,cursor:"pointer"}}>-</button>
+          <div style={{flex:1,textAlign:"center",fontSize:24,fontWeight:"bold",color:"#1E1B4B"}}>🪙 {amount}</div>
+          <button onClick={() => setAmount(a => a + 1)} style={{width:32,height:32,borderRadius:8,border:"none",background:"#0EA5E9",color:"white",fontWeight:"bold",fontSize:16,cursor:"pointer"}}>+</button>
+        </div>
+
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={doDeposit} disabled={amount > bucks || amount < 1} style={{
+            flex:1,padding:10,borderRadius:8,border:"none",
+            background:(amount > bucks || amount < 1)?"#D1D5DB":"#0EA5E9",
+            color:"white",fontWeight:"bold",fontSize:13,cursor:(amount > bucks)?"default":"pointer"
+          }}>💰 Deposit</button>
+          <button onClick={doWithdraw} disabled={amount > savings[target] || amount < 1} style={{
+            flex:1,padding:10,borderRadius:8,border:"none",
+            background:(amount > savings[target] || amount < 1)?"#D1D5DB":"#F59E0B",
+            color:"white",fontWeight:"bold",fontSize:13,cursor:(amount > savings[target])?"default":"pointer"
+          }}>🏧 Withdraw</button>
+        </div>
+      </div>
+
+      {fb && <div style={{background:"#D1FAE5",borderRadius:8,padding:8,textAlign:"center",fontWeight:"bold",color:"#065F46",fontSize:13}}>🎉 {fb}</div>}
+    </ModalWrap>
+  );
+}
+
+/* ---- BUDGET PLANNER ---- */
+function BudgetPlannerModal({bucks, savings, onClose}) {
+  const total = bucks + savings.spending + savings.giving + savings.future;
+  const items = [
+    { label: "🪙 In Wallet (to spend now)", value: bucks, color: "#F59E0B", desc: "Money you carry around for buying things" },
+    { label: "🛒 Spending Account", value: savings.spending, color: "#10B981", desc: "Saved for wants & needs you plan to buy" },
+    { label: "💝 Giving Account", value: savings.giving, color: "#EC4899", desc: "Saved to help others who need it" },
+    { label: "🎓 Future Account", value: savings.future, color: "#0EA5E9", desc: "Saved for big things like school & travel" },
+  ];
+
+  const [quizQ, setQuizQ] = useState(null);
+  const [quizFb, setQuizFb] = useState(null);
+
+  const quizzes = [
+    { q: "You earned 6 Owl Bucks. What's the SMARTEST thing to do?", choices: [
+      { text: "Spend it all on candy!", correct: false },
+      { text: "Save some, spend some, give some!", correct: true },
+      { text: "Hide it under your nest", correct: false },
+    ]},
+    { q: "Your friend lost their lunch money. What account helps?", choices: [
+      { text: "Future Account", correct: false },
+      { text: "Spending Account", correct: false },
+      { text: "Giving Account", correct: true },
+    ]},
+    { q: "You want to go to college someday. Where should you save?", choices: [
+      { text: "Future Account", correct: true },
+      { text: "Spending Account", correct: false },
+      { text: "Giving Account", correct: false },
+    ]},
+    { q: "You need new shoes for school. Which account?", choices: [
+      { text: "Future Account", correct: false },
+      { text: "Spending Account", correct: true },
+      { text: "Giving Account", correct: false },
+    ]},
+  ];
+
+  function startQuiz() {
+    setQuizQ(quizzes[Math.floor(Math.random() * quizzes.length)]);
+    setQuizFb(null);
+  }
+
+  function ansQuiz(choice) {
+    if (choice.correct) setQuizFb({ ok: true, msg: "That's right! Great budgeting! 🎉" });
+    else setQuizFb({ ok: false, msg: "Not quite! Think about what each account is for." });
+    setTimeout(() => { setQuizQ(null); setQuizFb(null); }, 2500);
+  }
+
+  return (
+    <ModalWrap title="Budget Planner" emoji="📊" color="#3B82F6" onClose={onClose}>
+      <div style={{background:"#EFF6FF",borderRadius:10,padding:12,marginBottom:10}}>
+        <div style={{textAlign:"center",marginBottom:10}}>
+          <p style={{fontSize:13,color:"#1E40AF",margin:"0 0 4px",fontWeight:"bold"}}>Your Total Money</p>
+          <p style={{fontSize:28,fontWeight:"bold",color:"#1E3A8A",margin:0}}>🪙 {total}</p>
+        </div>
+        {/* Bar chart */}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {items.map((item, i) => (
+            <div key={i}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:2}}>
+                <span style={{fontWeight:"bold",color:item.color}}>{item.label}</span>
+                <span style={{fontWeight:"bold",color:"#1E1B4B"}}>🪙{item.value}</span>
+              </div>
+              <div style={{background:"#DBEAFE",borderRadius:4,height:16,overflow:"hidden"}}>
+                <div style={{
+                  height:"100%",width:total>0?(item.value/total*100)+"%":"0%",
+                  background:item.color,borderRadius:4,transition:"width 0.5s",
+                  minWidth:item.value>0?"8px":"0"
+                }}/>
+              </div>
+              <p style={{fontSize:10,color:"#6B7280",margin:"2px 0 0"}}>{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={startQuiz} style={{
+        width:"100%",padding:10,background:"#3B82F6",color:"white",border:"none",
+        borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:13,marginBottom:8
+      }}>🧠 Budget Quiz!</button>
+
+      {quizQ && (
+        <div style={{background:"#EFF6FF",borderRadius:10,padding:12,marginBottom:8}}>
+          <p style={{fontWeight:"bold",color:"#1E3A8A",fontSize:13,margin:"0 0 8px"}}>{quizQ.q}</p>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {quizQ.choices.map((ch, i) => (
+              <button key={i} onClick={() => ansQuiz(ch)} style={{
+                padding:8,borderRadius:8,border:"2px solid #3B82F6",background:"white",
+                cursor:"pointer",fontWeight:"bold",fontSize:12,color:"#1E3A8A",textAlign:"left"
+              }}>{ch.text}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {quizFb && <div style={{
+        background:quizFb.ok?"#D1FAE5":"#FEE2E2",borderRadius:8,padding:8,
+        textAlign:"center",fontWeight:"bold",color:quizFb.ok?"#065F46":"#991B1B",fontSize:13
+      }}>{quizFb.ok?"🎉":"🤔"} {quizFb.msg}</div>}
+
+      <div style={{background:"#FFFBEB",borderRadius:8,padding:10,marginTop:8}}>
+        <p style={{fontSize:12,fontWeight:"bold",color:"#92400E",margin:"0 0 4px"}}>💡 Budget Tip!</p>
+        <p style={{fontSize:12,color:"#78350F",margin:0,lineHeight:1.5}}>
+          Try the 3-jar method! When you earn Owl Bucks, split them up: some for spending on needs and wants, some for giving to help others, and some for saving for the future!
+        </p>
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- GIVING CENTER ---- */
+function GivingCenterModal({savings, onGive, onClose}) {
+  const [fb, setFb] = useState(null);
+  const [given, setGiven] = useState([]);
+
+  const causes = [
+    { name: "Owl Food Bank", emoji: "🍎", desc: "Feed hungry owls who don't have enough food", cost: 3, type: "need" },
+    { name: "Warm Nest Fund", emoji: "🏠", desc: "Help build homes for owls without a nest", cost: 5, type: "need" },
+    { name: "School Supplies Drive", emoji: "📚", desc: "Buy pencils and books for owls who can't afford them", cost: 2, type: "need" },
+    { name: "Owl Hospital", emoji: "🏥", desc: "Help sick owls get the medicine they need", cost: 4, type: "need" },
+    { name: "Community Playground", emoji: "🎪", desc: "Build a new playground for all the young owls", cost: 6, type: "want" },
+  ];
+
+  function donate(cause) {
+    if (savings.giving < cause.cost) return;
+    onGive(cause.cost);
+    setGiven(g => [...g, cause.name]);
+    setFb("You donated to " + cause.name + "! Thank you for your generosity! 💝");
+    setTimeout(() => setFb(null), 3000);
+  }
+
+  return (
+    <ModalWrap title="Giving Center" emoji="💝" color="#EC4899" onClose={onClose}>
+      <div style={{background:"#FCE7F3",borderRadius:8,padding:8,textAlign:"center",marginBottom:10}}>
+        <span style={{fontWeight:"bold",color:"#9D174D",fontSize:14}}>💝 Giving Account: 🪙{savings.giving}</span>
+      </div>
+      <p style={{color:"#6B7280",fontSize:12,margin:"0 0 10px",textAlign:"center"}}>
+        Use your Giving Account to help others! Giving is one of the best things you can do with your money.
+      </p>
+
+      {fb && <div style={{background:"#D1FAE5",borderRadius:8,padding:8,marginBottom:8,textAlign:"center",fontWeight:"bold",color:"#065F46",fontSize:12}}>🎉 {fb}</div>}
+
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {causes.map((cause, i) => {
+          const alreadyGiven = given.includes(cause.name);
+          const canAfford = savings.giving >= cause.cost;
+          return (
+            <button key={i} onClick={() => { if (!alreadyGiven && canAfford) donate(cause); }}
+              disabled={alreadyGiven || !canAfford}
+              style={{
+                display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
+                border:"2px solid "+(cause.type==="need"?"#10B981":"#F59E0B"),
+                background:alreadyGiven?"#F0FDF4":"white",
+                cursor:(alreadyGiven||!canAfford)?"default":"pointer",
+                opacity:alreadyGiven?0.7:canAfford?1:0.5,textAlign:"left"
+              }}>
+              <div style={{fontSize:28,flexShrink:0}}>{cause.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:"bold",fontSize:12,color:"#1E1B4B"}}>{cause.name}</div>
+                <div style={{fontSize:10,color:"#6B7280"}}>{cause.desc}</div>
+                <div style={{fontSize:10,color:cause.type==="need"?"#059669":"#D97706",fontWeight:"bold"}}>
+                  {cause.type==="need"?"💚 Helps a need":"⭐ Community want"} • 🪙{cause.cost}
+                </div>
+              </div>
+              {alreadyGiven && <span style={{fontSize:18}}>✅</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {given.length > 0 && (
+        <div style={{background:"#FDF2F8",borderRadius:8,padding:8,marginTop:8,textAlign:"center"}}>
+          <p style={{fontSize:12,fontWeight:"bold",color:"#9D174D",margin:0}}>
+            🌟 You've helped {given.length} cause{given.length>1?"s":""}! What a generous owl!
+          </p>
+        </div>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- HUNTING MINI-GAME ---- */
+function HuntingModal({area, owlColor, onCatch, onClose}) {
+  const [creatures, setCreatures] = useState([]);
+  const [caught, setCaught] = useState([]);
+  const [gameActive, setGameActive] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(15);
+  const [msg, setMsg] = useState(null);
+  const timerRef = useRef(null);
+  const spawnRef = useRef(null);
+
+  const areaData = {
+    meadow_hunt: { name: "Meadow", bg: "#86EFAC", prey: [
+      { name: "Vole", emoji: "🐭", speed: 2 },
+      { name: "Mouse", emoji: "🐁", speed: 2.5 },
+      { name: "Cricket", emoji: "🦗", speed: 3 },
+      { name: "Grasshopper", emoji: "🦗", speed: 3.5 },
+    ]},
+    pond_hunt: { name: "Pond", bg: "#BAE6FD", prey: [
+      { name: "Fish", emoji: "🐟", speed: 3 },
+      { name: "Frog", emoji: "🐸", speed: 2 },
+      { name: "Crawfish", emoji: "🦐", speed: 2.5 },
+      { name: "Minnow", emoji: "🐟", speed: 4 },
+    ]},
+    forest_hunt: { name: "Forest", bg: "#A7F3D0", prey: [
+      { name: "Squirrel", emoji: "🐿️", speed: 3.5 },
+      { name: "Rabbit", emoji: "🐇", speed: 3 },
+      { name: "Beetle", emoji: "🪲", speed: 1.5 },
+      { name: "Worm", emoji: "🪱", speed: 1 },
+    ]},
+  };
+
+  const data = areaData[area] || areaData.meadow_hunt;
+
+  function startGame() {
+    setCaught([]);
+    setCreatures([]);
+    setTimeLeft(15);
+    setGameActive(true);
+    setMsg(null);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(timerRef.current);
+          clearInterval(spawnRef.current);
+          setGameActive(false);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+
+    spawnRef.current = setInterval(() => {
+      const prey = data.prey[Math.floor(Math.random() * data.prey.length)];
+      const id = Date.now() + Math.random();
+      const newCreature = {
+        id: id,
+        ...prey,
+        x: Math.random() * 300 + 50,
+        y: Math.random() * 150 + 40,
+        expiresAt: Date.now() + 2000,
+      };
+      setCreatures(c => [...c.filter(cr => Date.now() < cr.expiresAt), newCreature]);
+    }, 800);
+  }
+
+  useEffect(() => {
+    if (!gameActive && timeLeft === 0 && caught.length >= 0) {
+      setMsg("Time's up! You caught " + caught.length + " " + (caught.length === 1 ? "critter" : "critters") + "!");
+      onCatch(caught);
+    }
+  }, [gameActive, timeLeft]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (spawnRef.current) clearInterval(spawnRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gameActive) return;
+    const cleanup = setInterval(() => {
+      setCreatures(c => c.filter(cr => Date.now() < cr.expiresAt));
+    }, 200);
+    return () => clearInterval(cleanup);
+  }, [gameActive]);
+
+  function catchCreature(creature) {
+    setCaught(c => [...c, { name: creature.name, emoji: creature.emoji }]);
+    setCreatures(c => c.filter(cr => cr.id !== creature.id));
+  }
+
+  return (
+    <ModalWrap title={data.name + " Hunting"} emoji="🎯" color="#92400E" onClose={() => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (spawnRef.current) clearInterval(spawnRef.current);
+      onClose();
+    }}>
+      {!gameActive && !msg && (
+        <div style={{textAlign:"center",padding:10}}>
+          <p style={{fontSize:14,color:"#78350F",margin:"0 0 4px"}}>Hunt in the {data.name}!</p>
+          <p style={{fontSize:12,color:"#6B7280",margin:"0 0 12px"}}>Tap the critters as fast as you can before they disappear! You have 15 seconds.</p>
+          <p style={{fontSize:12,color:"#059669",fontWeight:"bold",margin:"0 0 12px"}}>Catching food is FREE — no Owl Bucks needed! Food is a NEED.</p>
+          <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:12}}>
+            {data.prey.map((p, i) => (
+              <div key={i} style={{background:"white",borderRadius:8,padding:6,textAlign:"center",border:"1px solid #E5E7EB"}}>
+                <div style={{fontSize:22}}>{p.emoji}</div>
+                <div style={{fontSize:9,color:"#6B7280"}}>{p.name}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={startGame} style={{
+            padding:"12px 32px",background:"#92400E",color:"white",border:"none",
+            borderRadius:10,fontWeight:"bold",fontSize:16,cursor:"pointer"
+          }}>🎯 Start Hunting!</button>
+        </div>
+      )}
+
+      {gameActive && (
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontWeight:"bold",color:"#92400E",fontSize:14}}>⏱️ {timeLeft}s</span>
+            <span style={{fontWeight:"bold",color:"#065F46",fontSize:14}}>🎯 Caught: {caught.length}</span>
+          </div>
+          <div style={{
+            position:"relative",width:"100%",height:220,background:data.bg,
+            borderRadius:12,overflow:"hidden",cursor:"crosshair",
+            border:"2px solid #92400E"
+          }}>
+            {/* Area decorations */}
+            <svg style={{position:"absolute",inset:0,pointerEvents:"none"}} viewBox="0 0 400 220">
+              {area==="meadow_hunt" && (<g>
+                {/* Grass tufts */}
+                <path d="M30,200 Q28,170 25,150" fill="none" stroke="#16A34A" strokeWidth={3} strokeLinecap="round"/>
+                <path d="M35,200 Q38,165 32,145" fill="none" stroke="#22C55E" strokeWidth={2.5} strokeLinecap="round"/>
+                <path d="M40,200 Q44,175 38,155" fill="none" stroke="#4ADE80" strokeWidth={2} strokeLinecap="round"/>
+                <path d="M350,210 Q348,180 345,160" fill="none" stroke="#16A34A" strokeWidth={3} strokeLinecap="round"/>
+                <path d="M355,210 Q360,175 353,155" fill="none" stroke="#22C55E" strokeWidth={2.5} strokeLinecap="round"/>
+                <path d="M360,210 Q365,185 358,165" fill="none" stroke="#4ADE80" strokeWidth={2} strokeLinecap="round"/>
+                {/* Bushes */}
+                <circle cx={70} cy={195} r={18} fill="#22C55E" opacity={0.6}/>
+                <circle cx={58} cy={190} r={12} fill="#16A34A" opacity={0.5}/>
+                <circle cx={330} cy={190} r={15} fill="#22C55E" opacity={0.5}/>
+                <circle cx={342} cy={195} r={12} fill="#4ADE80" opacity={0.4}/>
+                {/* Small flowers */}
+                <circle cx={120} cy={200} r={3} fill="#FBBF24"/><circle cx={120} cy={200} r={1.5} fill="white"/>
+                <circle cx={280} cy={195} r={3} fill="#F472B6"/><circle cx={280} cy={195} r={1.5} fill="white"/>
+                <circle cx={200} cy={205} r={3} fill="#A78BFA"/><circle cx={200} cy={205} r={1.5} fill="white"/>
+                {/* Rocks */}
+                <ellipse cx={160} cy={210} rx={12} ry={6} fill="#9CA3AF" opacity={0.4}/>
+                <ellipse cx={300} cy={208} rx={8} ry={5} fill="#9CA3AF" opacity={0.3}/>
+              </g>)}
+              {area==="pond_hunt" && (<g>
+                {/* Water */}
+                <ellipse cx={200} cy={140} rx={190} ry={80} fill="#7DD3FC" opacity={0.3}/>
+                {/* Ripples */}
+                <ellipse cx={100} cy={120} rx={15} ry={5} fill="none" stroke="white" strokeWidth={1} opacity={0.4}/>
+                <ellipse cx={280} cy={150} rx={18} ry={5} fill="none" stroke="white" strokeWidth={1} opacity={0.3}/>
+                <ellipse cx={180} cy={100} rx={12} ry={4} fill="none" stroke="white" strokeWidth={1} opacity={0.35}/>
+                {/* Lily pads */}
+                <ellipse cx={80} cy={160} rx={18} ry={10} fill="#22C55E" opacity={0.7}/>
+                <ellipse cx={80} cy={158} rx={15} ry={8} fill="#4ADE80" opacity={0.5}/>
+                <circle cx={85} cy={155} r={4} fill="#F472B6" opacity={0.7}/>
+                <ellipse cx={310} cy={130} rx={16} ry={9} fill="#22C55E" opacity={0.7}/>
+                <ellipse cx={310} cy={128} rx={13} ry={7} fill="#4ADE80" opacity={0.5}/>
+                <circle cx={314} cy={125} r={3.5} fill="#FBBF24" opacity={0.6}/>
+                <ellipse cx={170} cy={175} rx={14} ry={8} fill="#22C55E" opacity={0.6}/>
+                <ellipse cx={170} cy={173} rx={11} ry={6} fill="#4ADE80" opacity={0.4}/>
+                <ellipse cx={250} cy={100} rx={12} ry={7} fill="#16A34A" opacity={0.5}/>
+                {/* Reeds */}
+                <line x1={20} y1={210} x2={18} y2={140} stroke="#16A34A" strokeWidth={2.5}/>
+                <ellipse cx={17} cy={137} rx={3} ry={7} fill="#92400E"/>
+                <line x1={30} y1={210} x2={32} y2={150} stroke="#22C55E" strokeWidth={2}/>
+                <ellipse cx={33} cy={148} rx={2.5} ry={6} fill="#92400E"/>
+                <line x1={370} y1={210} x2={372} y2={145} stroke="#16A34A" strokeWidth={2.5}/>
+                <ellipse cx={373} cy={142} rx={3} ry={7} fill="#92400E"/>
+                <line x1={380} y1={210} x2={378} y2={155} stroke="#22C55E" strokeWidth={2}/>
+                <ellipse cx={377} cy={153} rx={2.5} ry={6} fill="#92400E"/>
+                {/* Dragonfly */}
+                <line x1={140} y1={60} x2={148} y2={56} stroke="#67E8F9" strokeWidth={1}/>
+                <line x1={140} y1={60} x2={148} y2={64} stroke="#67E8F9" strokeWidth={1}/>
+                <line x1={140} y1={60} x2={132} y2={56} stroke="#67E8F9" strokeWidth={1}/>
+                <line x1={140} y1={60} x2={132} y2={64} stroke="#67E8F9" strokeWidth={1}/>
+                <ellipse cx={140} cy={60} rx={4} ry={2} fill="#0EA5E9"/>
+              </g>)}
+              {area==="forest_hunt" && (<g>
+                {/* Trees */}
+                <rect x={15} y={80} width={10} height={130} fill="#78350F"/>
+                <circle cx={20} cy={70} r={28} fill="#166534" opacity={0.8}/>
+                <circle cx={10} cy={80} r={18} fill="#22C55E" opacity={0.6}/>
+                <circle cx={32} cy={78} r={16} fill="#15803D" opacity={0.7}/>
+                <rect x={355} y={90} width={10} height={120} fill="#78350F"/>
+                <circle cx={360} cy={80} r={26} fill="#166534" opacity={0.8}/>
+                <circle cx={350} cy={88} r={16} fill="#4ADE80" opacity={0.5}/>
+                <circle cx={372} cy={85} r={18} fill="#22C55E" opacity={0.6}/>
+                <rect x={180} y={100} width={8} height={110} fill="#78350F" opacity={0.4}/>
+                <circle cx={184} cy={92} r={22} fill="#15803D" opacity={0.35}/>
+                {/* Mushrooms */}
+                <rect x={90} y={192} width={4} height={10} fill="#E5E7EB"/>
+                <ellipse cx={92} cy={191} rx={8} ry={5} fill="#EF4444" opacity={0.7}/>
+                <circle cx={89} cy={190} r={1.5} fill="white" opacity={0.6}/>
+                <circle cx={95} cy={189} r={1} fill="white" opacity={0.6}/>
+                <rect x={305} y={195} width={3} height={8} fill="#E5E7EB"/>
+                <ellipse cx={306} cy={194} rx={6} ry={4} fill="#F59E0B" opacity={0.6}/>
+                {/* Fallen log */}
+                <rect x={220} y={200} width={60} height={10} rx={5} fill="#92400E" opacity={0.5}/>
+                <ellipse cx={220} cy={205} rx={5} ry={5} fill="#78350F" opacity={0.5}/>
+                {/* Ferns */}
+                <path d="M55,210 Q50,190 45,175" fill="none" stroke="#22C55E" strokeWidth={2} strokeLinecap="round"/>
+                <path d="M55,210 Q60,188 65,172" fill="none" stroke="#16A34A" strokeWidth={2} strokeLinecap="round"/>
+                <path d="M340,210 Q335,192 330,180" fill="none" stroke="#22C55E" strokeWidth={2} strokeLinecap="round"/>
+                <path d="M340,210 Q345,190 350,178" fill="none" stroke="#16A34A" strokeWidth={2} strokeLinecap="round"/>
+              </g>)}
+            </svg>
+            {creatures.map(cr => (
+              <button key={cr.id} onClick={() => catchCreature(cr)} style={{
+                position:"absolute",
+                left: cr.x,
+                top: cr.y,
+                fontSize: 28,
+                background:"none",
+                border:"none",
+                cursor:"pointer",
+                padding:0,
+                transform:"scale(1)",
+                transition:"transform 0.1s",
+                zIndex:2
+              }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.7)"; }}
+              >
+                {cr.emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{textAlign:"center",padding:10}}>
+          <p style={{fontSize:18,fontWeight:"bold",color:"#92400E",margin:"0 0 8px"}}>{msg}</p>
+          {caught.length > 0 && (
+            <div style={{marginBottom:12}}>
+              <p style={{fontSize:12,color:"#065F46",fontWeight:"bold",margin:"0 0 6px"}}>Your catch:</p>
+              <div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap"}}>
+                {caught.map((c, i) => (
+                  <span key={i} style={{background:"#D1FAE5",borderRadius:6,padding:"3px 8px",fontSize:12}}>
+                    {c.emoji} {c.name}
+                  </span>
+                ))}
+              </div>
+              <p style={{fontSize:11,color:"#059669",marginTop:6}}>💚 Food is a NEED — and you got it for free!</p>
+            </div>
+          )}
+          <button onClick={startGame} style={{
+            padding:"10px 24px",background:"#92400E",color:"white",border:"none",
+            borderRadius:8,fontWeight:"bold",fontSize:13,cursor:"pointer",marginRight:6
+          }}>🎯 Hunt Again!</button>
+        </div>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- DESTINATION PLACEHOLDER ---- */
+function DestModal({destName,onClose}) {
+  return (
+    <ModalWrap title={destName} emoji="🏛️" color="#4F46E5" onClose={onClose}>
+      <div style={{textAlign:"center",padding:10}}>
+        <p style={{fontSize:48,margin:"0 0 8px"}}>🏛️</p>
+        <p style={{color:"#6B7280",fontSize:14}}>Welcome to {destName}!</p>
+        <p style={{color:"#9CA3AF",fontSize:12,marginTop:8}}>More activities coming soon! 🚧</p>
+      </div>
+    </ModalWrap>
+  );
+}
+
+/* ---- NPC DATA ---- */
+const ISLAND_NPCS = {
+  home: [
+    { name:"Granny Hoot", color:"#F9A8D4", hat:"bonnet", sayings:["Welcome home, dear! A warm nest is a NEED!","I baked cookies. Cookies are a WANT... but tasty!","Remember to get plenty of sleep!"], startX:350, wanderRange:80 },
+    { name:"Gardener Gus", color:"#6EE7B7", hat:"straw", sayings:["Fresh vegetables — that's a NEED!","Fancy garden statues? Those are WANTS!","Growing food saves Owl Bucks!"], startX:550, wanderRange:60 },
+  ],
+  school: [
+    { name:"Professor Plume", color:"#93C5FD", hat:"graduation", sayings:["Math helps you count Owl Bucks!","Education is a NEED!","Practice makes perfect!"], startX:250, wanderRange:100 },
+    { name:"Coach Talon", color:"#FCA5A5", hat:"cap", sayings:["Exercise is a NEED!","Fancy sports shoes are a WANT!","Go play on the playground!"], startX:550, wanderRange:80 },
+  ],
+  engineering: [
+    { name:"Builder Bob", color:"#FCD34D", hat:"hardhat", sayings:["A sturdy house is a NEED!","Hard work earns Owl Bucks!","Measure twice, build once!"], startX:400, wanderRange:120 },
+    { name:"Sparky", color:"#A78BFA", hat:"goggles", sayings:["Tools are a NEED to build!","I made a bubble machine — a WANT but fun!","Safety goggles are a NEED!"], startX:180, wanderRange:60 },
+  ],
+  grocery: [
+    { name:"Chef Olive", color:"#86EFAC", hat:"chef", sayings:["Fresh voles and mice are NEEDS — they keep you strong!","Fancy squirrel is a tasty WANT!","A good meal of crickets keeps an owl healthy!"], startX:220, wanderRange:80 },
+    { name:"Shopkeeper Sam", color:"#FDE68A", hat:"apron", sayings:["What do you NEED today?","Smart shoppers buy NEEDS first!","Compare prices to save!"], startX:500, wanderRange:80 },
+  ],
+  airport: [
+    { name:"Captain Wing", color:"#FCA5A5", hat:"pilot", sayings:["Travel can be a WANT or NEED!","Visiting family? That's a NEED!","A fancy vacation? That's a WANT!"], startX:350, wanderRange:100 },
+    { name:"Attendant Flo", color:"#C4B5FD", hat:"beret", sayings:["Save Owl Bucks for a ticket!","Owlton DC is beautiful!","Budget for travel AND needs!"], startX:500, wanderRange:70 },
+  ],
+  bank: [
+    { name:"Banker Beatrice", color:"#7DD3FC", hat:"graduation", sayings:["Saving money is very important!","A budget helps you plan your spending!","Always save a little for the future!","The bank keeps your Owl Bucks safe!"], startX:280, wanderRange:90 },
+    { name:"Generous Gene", color:"#F9A8D4", hat:"bonnet", sayings:["Giving to others makes the world better!","Sharing is caring!","Even a small gift can make someone's day!","Helping others is one of the best things you can do!"], startX:520, wanderRange:80 },
+  ],
+  hunting: [
+    { name:"Tracker Tom", color:"#D4A76A", hat:"straw", sayings:["Catching your own food is a NEED!","Be patient and watch carefully!","The meadow has the most mice!","A good hunter is a quiet hunter!"], startX:300, wanderRange:100 },
+    { name:"Fisher Faye", color:"#7DD3FC", hat:"cap", sayings:["The pond is full of tasty fish!","Food from nature is free — no Owl Bucks needed!","Catching food saves you money at the store!","Every owl should know how to hunt!"], startX:520, wanderRange:80 },
+  ],
+};
+
+function NpcOwl({x, y, npc, tick, onClick}) {
+  const s = 32;
+  const walkOffset = Math.sin(tick * 0.04 + npc.startX) * npc.wanderRange * 0.5;
+  const actualX = x + walkOffset;
+  const bob = Math.sin(tick * 0.25 + npc.startX * 0.1) * 2;
+  const facingRight = Math.cos(tick * 0.04 + npc.startX) > 0;
+
+  function renderHat() {
+    if(npc.hat==="chef") return <g><rect x={s*0.28} y={0} width={s*0.44} height={s*0.16} rx={3} fill="white"/><ellipse cx={s*0.5} cy={s*0.02} rx={s*0.18} ry={s*0.08} fill="white"/></g>;
+    if(npc.hat==="hardhat") return <g><ellipse cx={s*0.5} cy={s*0.1} rx={s*0.32} ry={s*0.1} fill="#FCD34D"/><rect x={s*0.3} y={s*0.02} width={s*0.4} height={s*0.1} rx={3} fill="#FBBF24"/></g>;
+    if(npc.hat==="graduation") return <g><rect x={s*0.2} y={s*0.08} width={s*0.6} height={s*0.04} fill="#1E1B4B"/><rect x={s*0.35} y={0} width={s*0.3} height={s*0.1} fill="#1E1B4B"/></g>;
+    if(npc.hat==="cap") return <g><ellipse cx={s*0.5} cy={s*0.12} rx={s*0.28} ry={s*0.08} fill="#EF4444"/><rect x={s*0.32} y={s*0.04} width={s*0.36} height={s*0.1} rx={4} fill="#EF4444"/></g>;
+    if(npc.hat==="bonnet") return <g><ellipse cx={s*0.5} cy={s*0.1} rx={s*0.3} ry={s*0.12} fill="#FBCFE8"/></g>;
+    if(npc.hat==="straw") return <g><ellipse cx={s*0.5} cy={s*0.12} rx={s*0.38} ry={s*0.08} fill="#D4A76A"/><rect x={s*0.3} y={s*0.02} width={s*0.4} height={s*0.12} rx={3} fill="#E8C87A"/></g>;
+    if(npc.hat==="goggles") return <g><rect x={s*0.22} y={s*0.2} width={s*0.2} height={s*0.12} rx={3} fill="#67E8F9" stroke="#6B7280" strokeWidth={1}/><rect x={s*0.58} y={s*0.2} width={s*0.2} height={s*0.12} rx={3} fill="#67E8F9" stroke="#6B7280" strokeWidth={1}/></g>;
+    if(npc.hat==="pilot") return <g><ellipse cx={s*0.5} cy={s*0.1} rx={s*0.28} ry={s*0.1} fill="#1E3A8A"/><circle cx={s*0.5} cy={s*0.06} r={s*0.04} fill="#FCD34D"/></g>;
+    if(npc.hat==="beret") return <g><ellipse cx={s*0.48} cy={s*0.08} rx={s*0.28} ry={s*0.1} fill="#7C3AED"/></g>;
+    if(npc.hat==="apron") return <g><rect x={s*0.35} y={s*0.48} width={s*0.3} height={s*0.3} rx={2} fill="white" opacity={0.7}/></g>;
+    return null;
+  }
+
+  return (
+    <g transform={"translate("+(actualX-s/2)+","+(y-s/2+bob)+")"+(facingRight?"":" scale(-1,1) translate("+(-s)+",0)")} onClick={onClick} style={{cursor:"pointer"}}>
+      <ellipse cx={s*0.15} cy={s*0.55} rx={s*0.14} ry={s*0.18} fill={npc.color} opacity={0.8}/>
+      <ellipse cx={s*0.85} cy={s*0.55} rx={s*0.14} ry={s*0.18} fill={npc.color} opacity={0.8}/>
+      <ellipse cx={s/2} cy={s*0.6} rx={s*0.26} ry={s*0.3} fill={npc.color}/>
+      <circle cx={s/2} cy={s*0.3} r={s*0.22} fill={npc.color}/>
+      <polygon points={(s*0.32)+","+(s*0.14)+" "+(s*0.26)+","+(s*0.04)+" "+(s*0.38)+","+(s*0.1)} fill={npc.color}/>
+      <polygon points={(s*0.68)+","+(s*0.14)+" "+(s*0.74)+","+(s*0.04)+" "+(s*0.62)+","+(s*0.1)} fill={npc.color}/>
+      <circle cx={s*0.4} cy={s*0.28} r={s*0.08} fill="white"/><circle cx={s*0.6} cy={s*0.28} r={s*0.08} fill="white"/>
+      <circle cx={s*0.4} cy={s*0.28} r={s*0.045} fill="#1E1B4B"/><circle cx={s*0.6} cy={s*0.28} r={s*0.045} fill="#1E1B4B"/>
+      <polygon points={(s*0.46)+","+(s*0.34)+" "+(s/2)+","+(s*0.4)+" "+(s*0.54)+","+(s*0.34)} fill="#F59E0B"/>
+      <line x1={s*0.4} y1={s*0.85} x2={s*0.36} y2={s*0.95} stroke="#F59E0B" strokeWidth={1.5}/>
+      <line x1={s*0.4} y1={s*0.85} x2={s*0.44} y2={s*0.95} stroke="#F59E0B" strokeWidth={1.5}/>
+      <line x1={s*0.6} y1={s*0.85} x2={s*0.56} y2={s*0.95} stroke="#F59E0B" strokeWidth={1.5}/>
+      <line x1={s*0.6} y1={s*0.85} x2={s*0.64} y2={s*0.95} stroke="#F59E0B" strokeWidth={1.5}/>
+      {renderHat()}
+    </g>
+  );
+}
+
+function SpeechBubble({x, y, text, name}) {
+  const bw=320, lineLen=34;
+  const words=text.split(" ");
+  const lines=[];let cur="";
+  for(let i=0;i<words.length;i++){const test=cur?cur+" "+words[i]:words[i];if(test.length>lineLen&&cur){lines.push(cur);cur=words[i];}else{cur=test;}}
+  if(cur) lines.push(cur);
+  const lineH=18, padTop=32, padBot=14;
+  const bh=padTop+lines.length*lineH+padBot;
+  const bx=Math.max(bw/2+5,Math.min(800-bw/2-5,x));
+  return (
+    <g>
+      <rect x={bx-bw/2} y={y-bh-10} width={bw} height={bh} rx={14} fill="white" stroke="#7C3AED" strokeWidth={2.5}/>
+      <polygon points={(bx-8)+","+(y-10)+" "+(bx+8)+","+(y-10)+" "+bx+","+(y+4)} fill="white" stroke="#7C3AED" strokeWidth={2.5}/>
+      <rect x={bx-bw/2+2} y={y-bh-8} width={bw-4} height={bh-4} rx={12} fill="white"/>
+      <text x={bx} y={y-bh-10+22} textAnchor="middle" fontSize="14" fontWeight="bold" fill="#7C3AED">{name}</text>
+      {lines.map((line,i)=><text key={i} x={bx} y={y-bh-10+padTop+8+i*lineH} textAnchor="middle" fontSize="13" fill="#374151">{line}</text>)}
+    </g>
+  );
+}
+
+/* ---- ISLAND ZONE ---- */
+function IslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,tick}) {
+  const [owlPos,setOwlPos]=useState({x:400,y:420});
+  const [target,setTarget]=useState(null);
+  const [flying,setFlying]=useState(false);
+  const [speechBubble,setSpeechBubble]=useState(null);
+  const aRef=useRef(null);
+  const bob=Math.sin(tick*0.3)*3;
+  const npcs=ISLAND_NPCS[island.id]||[];
+
+  useEffect(()=>{
+    if(!target)return;setFlying(true);
+    const go=()=>{setOwlPos(p=>{const dx=target.x-p.x,dy=target.y-p.y,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<4){setFlying(false);setTarget(null);return{x:target.x,y:target.y};}
+      const spd=Math.max(3,dist*0.1);return{x:p.x+(dx/dist)*spd,y:p.y+(dy/dist)*spd};});aRef.current=requestAnimationFrame(go);};
+    aRef.current=requestAnimationFrame(go);return()=>cancelAnimationFrame(aRef.current);
+  },[target]);
+
+  function clickB(b){if(flying)return;setSpeechBubble(null);setTarget({x:b.x,y:300});setTimeout(()=>onBuildingClick(b),700);}
+  function clickNpc(npc){
+    const saying=npc.sayings[Math.floor(Math.random()*npc.sayings.length)];
+    const wo=Math.sin(tick*0.04+npc.startX)*npc.wanderRange*0.5;
+    setSpeechBubble({text:saying,name:npc.name,x:Math.max(170,Math.min(630,npc.startX+wo)),y:370});
+    setTimeout(()=>setSpeechBubble(null),4000);
+  }
+
+  return (
+    <div style={{position:"relative"}}>
+      <svg viewBox="0 0 800 520" style={{width:"100%",height:"auto",borderRadius:14,border:"3px solid "+island.color,overflow:"hidden"}}>
+        <defs>
+          <linearGradient id="sky3d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#87CEEB"/><stop offset="40%" stopColor="#B0E0FF"/><stop offset="100%" stopColor="#E0F4FF"/></linearGradient>
+          <linearGradient id="grass3d" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4ADE80"/><stop offset="30%" stopColor="#22C55E"/><stop offset="100%" stopColor="#166534"/></linearGradient>
+        </defs>
+        <rect width="800" height="520" fill="url(#sky3d)" rx="10"/>
+        <g opacity={0.7}><ellipse cx={120} cy={60} rx={45} ry={16} fill="white"/><ellipse cx={100} cy={65} rx={25} ry={12} fill="white"/><ellipse cx={142} cy={64} rx={28} ry={13} fill="white"/></g>
+        <g opacity={0.7}><ellipse cx={350} cy={40} rx={45} ry={16} fill="white"/><ellipse cx={330} cy={45} rx={25} ry={12} fill="white"/><ellipse cx={372} cy={44} rx={28} ry={13} fill="white"/></g>
+        <g opacity={0.7}><ellipse cx={600} cy={70} rx={45} ry={16} fill="white"/><ellipse cx={580} cy={75} rx={25} ry={12} fill="white"/><ellipse cx={622} cy={74} rx={28} ry={13} fill="white"/></g>
+        <circle cx="720" cy="60" r="35" fill="#FCD34D" opacity={0.8}/><circle cx="720" cy="60" r="28" fill="#FDE68A"/>
+        <path d="M-50,340 L850,340 L900,520 L-100,520 Z" fill="url(#grass3d)"/>
+        <line x1="50" y1="360" x2="750" y2="360" stroke="#16A34A" strokeWidth={0.8} opacity={0.2}/>
+        <line x1="20" y1="380" x2="780" y2="380" stroke="#16A34A" strokeWidth={0.8} opacity={0.2}/>
+        <line x1="0" y1="400" x2="800" y2="400" stroke="#16A34A" strokeWidth={0.8} opacity={0.15}/>
+        <path d="M350,520 Q380,440 400,380 Q420,440 450,520" fill="#D4A76A" opacity={0.4}/>
+        <ellipse cx="150" cy="345" rx="120" ry="25" fill="#86EFAC" opacity={0.5}/>
+        <ellipse cx="650" cy="342" rx="100" ry="20" fill="#86EFAC" opacity={0.4}/>
+        {buildings.map(b=><Building3D key={b.id} x={b.x} btype={b.btype} name={b.name} onClick={()=>clickB(b)}/>)}
+        {npcs.map((npc,i)=><NpcOwl key={i} x={npc.startX} y={410} npc={npc} tick={tick} onClick={()=>clickNpc(npc)}/>)}
+        <g transform={"translate(0,"+bob+")"}><Owl x={owlPos.x} y={owlPos.y} size={42} color={owlColor} name={owlName} isFlying={flying}/></g>
+        {speechBubble&&<SpeechBubble x={speechBubble.x} y={speechBubble.y} text={speechBubble.text} name={speechBubble.name}/>}
+        <rect x="280" y="8" width="240" height="30" rx="15" fill="rgba(0,0,0,0.3)"/>
+        <text x="400" y="28" textAnchor="middle" fontSize="16" fill="white" fontWeight="bold">{island.emoji} {island.name}</text>
+      </svg>
+      <button onClick={onBack} style={{position:"absolute",top:12,left:12,background:"rgba(0,0,0,0.4)",color:"white",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 14px",cursor:"pointer",fontWeight:"bold",fontSize:13,zIndex:5}}>← Back to Opal</button>
+    </div>
+  );
+}
+
+/* ---- OVERWORLD ---- */
+function OverworldMap({owlPos,onIslandClick,owlColor,owlName,isFlying,tick}) {
+  const bob=Math.sin(tick*0.3)*3;
+  return (
+    <svg viewBox="0 0 800 550" style={{width:"100%",height:"auto",borderRadius:14,border:"3px solid #4C1D95",background:"#070B1A"}}>
+      <defs><radialGradient id="bg" cx="50%" cy="50%" r="60%"><stop offset="0%" stopColor="#1a1040"/><stop offset="100%" stopColor="#070B1A"/></radialGradient></defs>
+      <rect width="800" height="550" fill="url(#bg)" rx="10"/>
+      {Array.from({length:55},(_,i)=><circle key={i} cx={(i*137+23)%800} cy={(i*89+11)%550} r={0.8+(i%3)*0.6} fill="white" opacity={0.2+(i%4)*0.12}/>)}
+      <ellipse cx="400" cy="280" rx="300" ry="190" fill="none" stroke="#818CF8" strokeWidth={1} opacity={0.12}/>
+      {ISLANDS.map(isl=>(
+        <g key={isl.id} onClick={()=>onIslandClick(isl)} style={{cursor:"pointer"}}>
+          <ellipse cx={isl.x} cy={isl.y+isl.r*0.6} rx={isl.r*0.7} ry={isl.r*0.15} fill="rgba(0,0,0,0.2)"/>
+          <path d={"M"+(isl.x-isl.r*0.65)+","+(isl.y+isl.r*0.08)+" Q"+(isl.x-isl.r*0.25)+","+(isl.y+isl.r*0.75)+" "+isl.x+","+(isl.y+isl.r*0.6)+" Q"+(isl.x+isl.r*0.25)+","+(isl.y+isl.r*0.75)+" "+(isl.x+isl.r*0.65)+","+(isl.y+isl.r*0.08)} fill="#8B7355" opacity={0.6}/>
+          <ellipse cx={isl.x} cy={isl.y} rx={isl.r} ry={isl.r*0.33} fill="#4ADE80"/>
+          <ellipse cx={isl.x} cy={isl.y-isl.r*0.04} rx={isl.r*0.85} ry={isl.r*0.22} fill="#86EFAC" opacity={0.5}/>
+          <ellipse cx={isl.x} cy={isl.y} rx={isl.r+3} ry={isl.r*0.33+3} fill="none" stroke={isl.color} strokeWidth={2} opacity={0.4}/>
+          <text x={isl.x} y={isl.y-2} textAnchor="middle" fontSize="24">{isl.emoji}</text>
+          <text x={isl.x} y={isl.y+isl.r*0.33+16} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold" opacity={0.9}>{isl.name}</text>
+        </g>
+      ))}
+      <g transform={"translate(0,"+bob+")"}><Owl x={owlPos.x} y={owlPos.y} size={44} color={owlColor} name={owlName} isFlying={isFlying}/></g>
+    </svg>
+  );
+}
+
+/* ---- MAIN GAME ---- */
+function OpalGame() {
+  const [screen,setScreen]=useState("title");
+  const [owlName,setOwlName]=useState("");
+  const [colorIdx,setColorIdx]=useState(0);
+  const [view,setView]=useState("overworld");
+  const [currentIsland,setCurrentIsland]=useState(null);
+  const [currentDest,setCurrentDest]=useState(null);
+  const [activeModal,setActiveModal]=useState(null);
+  const [owlPos,setOwlPos]=useState({x:400,y:230});
+  const [targetPos,setTargetPos]=useState(null);
+  const [isFlying,setIsFlying]=useState(false);
+  const [bucks,setBucks]=useState(5);
+  const [inventory,setInventory]=useState([]);
+  const [builtItems,setBuiltItems]=useState([]);
+  const [pets,setPets]=useState([]);
+  const [savings, setSavings] = useState({ spending: 0, giving: 0, future: 0 });
+  const [energy,setEnergy]=useState(100);
+  const [msg,setMsg]=useState("");
+  const [tick,setTick]=useState(0);
+  const animRef=useRef(null);
+
+  useEffect(()=>{const t=setInterval(()=>setTick(k=>k+1),100);return()=>clearInterval(t);},[]);
+  useEffect(()=>{
+    if(!targetPos)return;setIsFlying(true);
+    const go=()=>{setOwlPos(p=>{const dx=targetPos.x-p.x,dy=targetPos.y-p.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<4){setIsFlying(false);setTargetPos(null);return{x:targetPos.x,y:targetPos.y};}
+      const s=Math.max(3,d*0.08);return{x:p.x+(dx/d)*s,y:p.y+(dy/d)*s};});animRef.current=requestAnimationFrame(go);};
+    animRef.current=requestAnimationFrame(go);return()=>cancelAnimationFrame(animRef.current);
+  },[targetPos]);
+
+  function flyToIsland(isl){
+    if(isFlying)return;
+    if(energy<=0){setMsg("Too tired! Go home to sleep! 😴");setTimeout(()=>setMsg(""),2000);return;}
+    SFX.fly();
+    setTargetPos({x:isl.x,y:isl.y-30});setMsg("Flying to "+isl.emoji+" "+isl.name+"...");setEnergy(e=>Math.max(0,e-3));
+    setTimeout(()=>{setCurrentIsland(isl);setView("island");setMsg("");},900);
+  }
+  function handleBuildingClick(b){setActiveModal(b.id);}
+  function goBack(){setView("overworld");setCurrentIsland(null);setCurrentDest(null);setActiveModal(null);}
+  function buyItem(item){if(bucks>=item.price&&!inventory.includes(item.name)){setBucks(b=>b-item.price);setInventory(inv=>[...inv,item.name]);}}
+  function buildItem(p){if(bucks>=p.price&&!builtItems.includes(p.name)){setBucks(b=>b-p.price);setBuiltItems(bi=>[...bi,p.name]);}}
+  function buyPet(pet){if(bucks>=pet.price&&!pets.some(p=>p.name===pet.name)){setBucks(b=>b-pet.price);setPets(ps=>[...ps,pet]);}}
+  function depositToSavings(cat, amt) {
+    if (bucks >= amt) { setBucks(b => b - amt); setSavings(s => ({ ...s, [cat]: s[cat] + amt })); }
+  }
+  function withdrawFromSavings(cat, amt) {
+    if (savings[cat] >= amt) { setSavings(s => ({ ...s, [cat]: s[cat] - amt })); setBucks(b => b + amt); }
+  }
+  function giveFromSavings(amt) {
+    if (savings.giving >= amt) { setSavings(s => ({ ...s, giving: s.giving - amt })); }
+  }
+  function handleCatch(caughtItems) {
+    const names = caughtItems.map(c => c.name + " (" + c.emoji + ")");
+    names.forEach(n => {
+      if (!inventory.includes(n)) setInventory(inv => [...inv, n]);
+    });
+  }
+  function handleAirportGate(dest){
+    if(bucks>=dest.cost){setBucks(b=>b-dest.cost);setCurrentDest(dest);setView("destination");setCurrentIsland({id:"dest",name:dest.name,emoji:dest.emoji,color:"#4F46E5"});}
+    else{setMsg("Need 🪙 "+dest.cost+"! You have 🪙 "+bucks);setTimeout(()=>setMsg(""),2500);}
+  }
+
+  if(screen==="title") return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A,#1E1B4B,#312E81)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:20,color:"white"}}>
+      <svg width="100" height="110" viewBox="0 0 80 100" style={{marginBottom:8}}><Owl x={40} y={40} size={60} color={OWL_COLORS[colorIdx]} isFlying={true}/></svg>
+      <h1 style={{fontSize:44,margin:"0 0 2px",background:"linear-gradient(90deg,#C4B5FD,#A5B4FC,#FCD34D)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",fontWeight:800}}>OPAL WORLD</h1>
+      <p style={{fontSize:15,color:"#A5B4FC",margin:"0 0 28px",letterSpacing:1}}>Learn about Wants & Needs!</p>
+      <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:24,maxWidth:340,width:"100%"}}>
+        <label style={{display:"block",marginBottom:4,fontSize:13,color:"#C4B5FD"}}>Name your owl:</label>
+        <input value={owlName} onChange={e=>setOwlName(e.target.value)} placeholder="Type a name..." style={{width:"100%",padding:10,borderRadius:8,border:"2px solid #7C3AED",background:"rgba(255,255,255,0.1)",color:"white",fontSize:16,outline:"none",boxSizing:"border-box",marginBottom:14}}/>
+        <label style={{display:"block",marginBottom:6,fontSize:13,color:"#C4B5FD"}}>Pick a color:</label>
+        <div style={{display:"flex",gap:8,marginBottom:20,justifyContent:"center"}}>
+          {OWL_COLORS.map((c,i)=><button key={i} onClick={()=>setColorIdx(i)} style={{width:36,height:36,borderRadius:"50%",background:c,border:i===colorIdx?"3px solid white":"3px solid transparent",cursor:"pointer",transform:i===colorIdx?"scale(1.2)":"scale(1)",transition:"all 0.2s"}}/>)}
+        </div>
+        <button onClick={()=>{if(owlName.trim()){SFX.init().then(()=>{SFX.startSong();setScreen("game");});}}} disabled={!owlName.trim()} style={{width:"100%",padding:14,background:owlName.trim()?"linear-gradient(90deg,#7C3AED,#6366F1)":"#4B5563",color:"white",border:"none",borderRadius:12,fontSize:18,fontWeight:"bold",cursor:owlName.trim()?"pointer":"default"}}>🚀 Start Adventure!</button>
+      </div>
+    </div>
+  );
+
+  let buildings=[];
+  if(view==="island"&&currentIsland) buildings=ISLAND_BUILDINGS[currentIsland.id]||[];
+  else if(view==="destination"&&currentDest) buildings=currentDest.buildings||[];
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A,#1E1B4B)",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6,maxWidth:800,margin:"0 auto 6px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:20}}>🦉</span><span style={{color:"white",fontWeight:"bold",fontSize:15}}>{owlName}</span></div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{background:"rgba(255,255,255,0.12)",borderRadius:16,padding:"4px 12px",color:"#FCD34D",fontWeight:"bold",fontSize:14}}>🪙 {bucks}</div>
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:"4px 10px",color:"#7DD3FC",fontWeight:"bold",fontSize:12}}>🏦 {savings.spending+savings.giving+savings.future}</div>
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:"4px 10px",fontSize:12,color:energy>30?"#A5B4FC":"#FCA5A5"}}>⚡ {energy}%</div>
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:"4px 10px",color:"#C4B5FD",fontSize:11}}>🎒 {inventory.length+builtItems.length} 🐾 {pets.length}</div>
+        </div>
+      </div>
+      {msg&&<div style={{background:"rgba(124,58,237,0.85)",color:"white",textAlign:"center",padding:6,borderRadius:8,fontWeight:"bold",fontSize:13,maxWidth:800,margin:"0 auto 6px"}}>{msg}</div>}
+      <div style={{maxWidth:800,margin:"0 auto",position:"relative"}}>
+        {view==="overworld"&&<OverworldMap owlPos={owlPos} onIslandClick={flyToIsland} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} isFlying={isFlying} tick={tick}/>}
+        {(view==="island"||view==="destination")&&currentIsland&&<IslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick}/>}
+      </div>
+
+      {activeModal==="math_class"&&<MathClassModal bucks={bucks} onEarn={n=>{SFX.earnBucks();setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="playground"&&<PlaygroundModal owlColor={OWL_COLORS[colorIdx]} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="library"&&<LibraryModal onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="job_board"&&<WorkModal bucks={bucks} onEarn={n=>{SFX.earnBucks();setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="workshop"&&<WorkshopModal bucks={bucks} onBuild={p=>{SFX.spendBucks();buildItem(p);}} builtItems={builtItems} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="food_store"&&<ShopModal title="Food Store" emoji="🥖" color="#16A34A" items={GROCERY_ITEMS.food_store} bucks={bucks} onBuy={item=>{SFX.spendBucks();buyItem(item);}} inventory={inventory} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="clothing"&&<ShopModal title="Clothing" emoji="👕" color="#DB2777" items={GROCERY_ITEMS.clothing} bucks={bucks} onBuy={item=>{SFX.spendBucks();buyItem(item);}} inventory={inventory} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="supply"&&<ShopModal title="Supplies" emoji="🎒" color="#0891B2" items={GROCERY_ITEMS.supply} bucks={bucks} onBuy={item=>{SFX.spendBucks();buyItem(item);}} inventory={inventory} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="pet_store"&&<PetStoreModal bucks={bucks} onBuy={pet=>{SFX.spendBucks();buyPet(pet);}} ownedPets={pets} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="house"&&<HomeModal inventory={inventory} builtItems={builtItems} pets={pets} energy={energy} onSleep={()=>setEnergy(e=>Math.min(100,e+30))} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="garden"&&<GardenModal builtItems={builtItems} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="bank_lobby"&&<BankLobbyModal bucks={bucks} savings={savings} onDeposit={depositToSavings} onWithdraw={withdrawFromSavings} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="budget_desk"&&<BudgetPlannerModal bucks={bucks} savings={savings} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="giving_center"&&<GivingCenterModal savings={savings} onGive={giveFromSavings} onClose={()=>setActiveModal(null)}/>}
+      {(activeModal==="meadow_hunt"||activeModal==="pond_hunt"||activeModal==="forest_hunt")&&
+        <HuntingModal area={activeModal} owlColor={OWL_COLORS[colorIdx]} onCatch={handleCatch} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="ticket_desk"&&(
+        <ModalWrap title="Tickets" emoji="🎫" color="#DC2626" onClose={()=>setActiveModal(null)}>
+          <BucksBar bucks={bucks}/>
+          {Object.entries(AIRPORT_DESTINATIONS).map(([k,dest])=>(
+            <button key={k} onClick={()=>{setActiveModal(null);handleAirportGate(dest);}} style={{width:"100%",padding:12,marginBottom:6,borderRadius:10,border:"2px solid #6366F1",background:bucks>=dest.cost?"white":"#F3F4F6",cursor:bucks>=dest.cost?"pointer":"default",opacity:bucks>=dest.cost?1:0.5,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:28}}>{dest.emoji}</span><div style={{textAlign:"left"}}><div style={{fontWeight:"bold",color:"#1E1B4B",fontSize:14}}>{dest.name}</div><div style={{fontSize:11,color:"#7C3AED"}}>🪙 {dest.cost}</div></div></button>))}
+        </ModalWrap>)}
+      {activeModal==="owlton_gate"&&<ModalWrap title="Owlton DC" emoji="🏛️" color="#4F46E5" onClose={()=>setActiveModal(null)}><p style={{color:"#6B7280",fontSize:13,textAlign:"center"}}>Buy a ticket at the Ticket Desk! 🎫</p></ModalWrap>}
+      {activeModal==="mountain_gate"&&<ModalWrap title="Mt. Owl" emoji="🏔️" color="#0D9488" onClose={()=>setActiveModal(null)}><p style={{color:"#6B7280",fontSize:13,textAlign:"center"}}>Buy a ticket at the Ticket Desk! 🎫</p></ModalWrap>}
+      {activeModal==="monument"&&(
+        <ModalWrap title="Owl Monument" emoji="🗽" color="#6B7280" onClose={()=>setActiveModal(null)}>
+          <div style={{textAlign:"center",padding:10}}>
+            <svg viewBox="0 0 200 200" width="180" height="180">
+              <rect x={80} y={160} width={40} height={15} rx={3} fill="#9CA3AF"/>
+              <rect x={85} y={140} width={30} height={24} rx={2} fill="#B4B9C2"/>
+              <rect x={90} y={40} width={20} height={104} fill="#D1D5DB"/>
+              <ellipse cx={100} cy={30} rx={20} ry={18} fill="#A0AEC0"/>
+              <circle cx={100} cy={18} r={15} fill="#A0AEC0"/>
+              <circle cx={94} cy={15} r={4} fill="#FCD34D"/><circle cx={106} cy={15} r={4} fill="#FCD34D"/>
+              <polygon points="97,22 100,28 103,22" fill="#F59E0B"/>
+              <polygon points="88,7 82,0 94,5" fill="#A0AEC0"/><polygon points="112,7 118,0 106,5" fill="#A0AEC0"/>
+              <ellipse cx={80} cy={28} rx={8} ry={14} fill="#A0AEC0" opacity={0.7}/>
+              <ellipse cx={120} cy={28} rx={8} ry={14} fill="#A0AEC0" opacity={0.7}/>
+            </svg>
+            <p style={{fontSize:16,fontWeight:"bold",color:"#4C1D95",margin:"8px 0 4px"}}>The Great Owl Monument</p>
+            <p style={{color:"#6B7280",fontSize:12}}>A tribute to the wise owls who founded Opal World!</p>
+          </div>
+        </ModalWrap>
+      )}
+      {activeModal==="post_office"&&<PostOfficeModal inventory={inventory} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="hotel"&&<HotelModal energy={energy} onSleep={()=>setEnergy(e=>Math.min(100,e+50))} onClose={()=>setActiveModal(null)}/>}
+      {(activeModal==="campsite"||activeModal==="trail"||activeModal==="ranger")&&<DestModal destName={activeModal.replace(/_/g," ")} onClose={()=>setActiveModal(null)}/>}
+
+      <div style={{maxWidth:800,margin:"8px auto 0",textAlign:"center",color:"#6366F1",fontSize:11}}>💡 Earn Owl Bucks at School & Engineering. Spend wisely — needs before wants!</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(OpalGame));
+    </script>
+</body>
+</html>
