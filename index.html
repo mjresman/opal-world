@@ -68,7 +68,7 @@ const SFX = {
 
 const OWL_COLORS = ["#A78BFA","#F9A8D4","#6EE7B7","#FCD34D","#93C5FD","#FCA5A5"];
 
-const ISLANDS = [
+const BASE_ISLANDS = [
   { id:"home", name:"Home Island", emoji:"🏠", x:400, y:250, color:"#8B5CF6", r:50 },
   { id:"school", name:"School Island", emoji:"🏫", x:130, y:140, color:"#3B82F6", r:42 },
   { id:"engineering", name:"Engineering Isle", emoji:"🔧", x:670, y:140, color:"#F59E0B", r:42 },
@@ -77,6 +77,15 @@ const ISLANDS = [
   { id:"bank", name:"Bank Island", emoji:"🏦", x:400, y:470, color:"#0EA5E9", r:42 },
   { id:"hunting", name:"Hunting Grounds", emoji:"🌾", x:250, y:470, color:"#92400E", r:42 },
 ];
+
+const BIRTHDAY_ISLAND = { id:"birthday", name:"Birthday Island", emoji:"🎂", x:550, y:470, color:"#EC4899", r:42 };
+
+function getIslands(owlName) {
+  if (owlName.toLowerCase().trim() === "starla") {
+    return [...BASE_ISLANDS, BIRTHDAY_ISLAND];
+  }
+  return BASE_ISLANDS;
+}
 
 const ISLAND_BUILDINGS = {
   home: [
@@ -112,6 +121,11 @@ const ISLAND_BUILDINGS = {
     { id:"meadow_hunt", name:"Meadow", x:150, btype:"meadow" },
     { id:"pond_hunt", name:"Pond", x:400, btype:"pond" },
     { id:"forest_hunt", name:"Forest", x:650, btype:"forest" },
+  ],
+  birthday: [
+    { id:"movie_theater", name:"Movie Theater", x:150, btype:"birthday_movie" },
+    { id:"puzzle_place", name:"Puzzle Place", x:400, btype:"birthday_puzzle" },
+    { id:"rock_climbing", name:"Rock Climbing", x:650, btype:"birthday_climb" },
   ],
 };
 
@@ -439,6 +453,9 @@ function Building3D({x, btype, name, onClick}) {
     bank_main:{wall:"#E0F2FE",side:"#7DD3FC",roof:"#0369A1",door:"#0C4A6E",win:"#FEF3C7",accent:"#0EA5E9"},
     bank_budget:{wall:"#DBEAFE",side:"#93C5FD",roof:"#1D4ED8",door:"#1E3A8A",win:"#FEF3C7",accent:"#3B82F6"},
     bank_giving:{wall:"#FCE7F3",side:"#F9A8D4",roof:"#BE185D",door:"#9D174D",win:"#FEF3C7",accent:"#EC4899"},
+    birthday_movie:{wall:"#FEE2E2",side:"#FCA5A5",roof:"#9D174D",door:"#831843",win:"#FCD34D",accent:"#EC4899"},
+    birthday_puzzle:{wall:"#DBEAFE",side:"#93C5FD",roof:"#1D4ED8",door:"#1E3A8A",win:"#FCD34D",accent:"#3B82F6"},
+    birthday_climb:{wall:"#D1FAE5",side:"#6EE7B7",roof:"#065F46",door:"#064E3B",win:"#FCD34D",accent:"#059669"},
   };
 
   if(btype==="meadow") {
@@ -613,6 +630,9 @@ function Building3D({x, btype, name, onClick}) {
       {btype==="bank_main" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🏦</text>}
       {btype==="bank_budget" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">📊</text>}
       {btype==="bank_giving" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">💝</text>}
+      {btype==="birthday_movie" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🎬</text>}
+      {btype==="birthday_puzzle" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🧩</text>}
+      {btype==="birthday_climb" && <text x={bx} y={by-h-roofH+12} textAnchor="middle" fontSize="16">🧗</text>}
       <rect x={bx-30} y={by-h-roofH+4} width={60} height={14} rx={4} fill="white" opacity={0.85}/>
       <text x={bx} y={by-h-roofH+14} textAnchor="middle" fontSize="9" fill={c.accent} fontWeight="bold">{name}</text>
       <text x={bx} y={by+48} textAnchor="middle" fontSize="12" fill="white" fontWeight="bold">{name}</text>
@@ -1935,6 +1955,10 @@ const ISLAND_NPCS = {
     { name:"Banker Beatrice", color:"#7DD3FC", hat:"graduation", sayings:["Saving money is very important!","A budget helps you plan your spending!","Always save a little for the future!","The bank keeps your Owl Bucks safe!"], startX:280, wanderRange:90 },
     { name:"Generous Gene", color:"#F9A8D4", hat:"bonnet", sayings:["Giving to others makes the world better!","Sharing is caring!","Even a small gift can make someone's day!","Helping others is one of the best things you can do!"], startX:520, wanderRange:80 },
   ],
+  birthday: [
+    { name:"DJ Dolphin", color:"#7DD3FC", hat:"cap", sayings:["Happy Birthday Finley! 🎉","This party is AMAZING!","Dolphins love birthdays!","Let's celebrate!"], startX:300, wanderRange:90 },
+    { name:"Party Patty", color:"#F9A8D4", hat:"bonnet", sayings:["Welcome to Birthday Island!","Have you tried the rock wall?","The dolphin movies are so fun!","Happy Birthday Finley! 🎂"], startX:520, wanderRange:80 },
+  ],
   hunting: [
     { name:"Tracker Tom", color:"#D4A76A", hat:"straw", sayings:["Catching your own food is a NEED!","Be patient and watch carefully!","The meadow has the most mice!","A good hunter is a quiet hunter!"], startX:300, wanderRange:100 },
     { name:"Fisher Faye", color:"#7DD3FC", hat:"cap", sayings:["The pond is full of tasty fish!","Food from nature is free — no Owl Bucks needed!","Catching food saves you money at the store!","Every owl should know how to hunt!"], startX:520, wanderRange:80 },
@@ -1999,6 +2023,420 @@ function SpeechBubble({x, y, text, name}) {
       <text x={bx} y={y-bh-10+22} textAnchor="middle" fontSize="14" fontWeight="bold" fill="#7C3AED">{name}</text>
       {lines.map((line,i)=><text key={i} x={bx} y={y-bh-10+padTop+8+i*lineH} textAnchor="middle" fontSize="13" fill="#374151">{line}</text>)}
     </g>
+  );
+}
+
+/* ---- BIRTHDAY ISLAND ZONE ---- */
+function BirthdayIslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,tick,pets,activePet,onTogglePet}) {
+  const [owlPos,setOwlPos]=useState({x:400,y:420});
+  const [petPos,setPetPos]=useState({x:420,y:430});
+  const [target,setTarget]=useState(null);
+  const [flying,setFlying]=useState(false);
+  const [speechBubble,setSpeechBubble]=useState(null);
+  const aRef=useRef(null);
+  const bob=Math.sin(tick*0.3)*3;
+  const petBob=Math.sin(tick*0.35+1)*2.5;
+  const npcs=ISLAND_NPCS[island.id]||[];
+
+  useEffect(()=>{
+    if(!activePet) return;
+    const fi = setInterval(()=>{
+      setPetPos(pp=>{
+        const dx=owlPos.x+20-pp.x,dy=owlPos.y+15-pp.y,dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<8) return pp;
+        const spd=Math.max(1.5,dist*0.06);
+        return {x:pp.x+(dx/dist)*spd, y:pp.y+(dy/dist)*spd};
+      });
+    },50);
+    return ()=>clearInterval(fi);
+  },[activePet,owlPos]);
+
+  useEffect(()=>{
+    if(!target)return;setFlying(true);
+    const go=()=>{setOwlPos(p=>{const dx=target.x-p.x,dy=target.y-p.y,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<4){setFlying(false);setTarget(null);return{x:target.x,y:target.y};}
+      const spd=Math.max(3,dist*0.1);return{x:p.x+(dx/dist)*spd,y:p.y+(dy/dist)*spd};});aRef.current=requestAnimationFrame(go);};
+    aRef.current=requestAnimationFrame(go);return()=>cancelAnimationFrame(aRef.current);
+  },[target]);
+
+  function clickB(b){if(flying)return;setSpeechBubble(null);setTarget({x:b.x,y:300});setTimeout(()=>onBuildingClick(b),700);}
+  function clickNpc(npc){
+    const saying=npc.sayings[Math.floor(Math.random()*npc.sayings.length)];
+    const wo=Math.sin(tick*0.04+npc.startX)*npc.wanderRange*0.5;
+    setSpeechBubble({text:saying,name:npc.name,x:Math.max(170,Math.min(630,npc.startX+wo)),y:370});
+    setTimeout(()=>setSpeechBubble(null),4000);
+  }
+
+  // Confetti particles
+  const confetti = Array.from({length:30},(_,i)=>({
+    x:(i*127+50)%800,
+    y:((tick*1.5+i*43)%580)-30,
+    color:["#EC4899","#F59E0B","#3B82F6","#10B981","#EF4444","#8B5CF6","#FCD34D"][i%7],
+    size:3+i%4,
+    rot:(tick*3+i*37)%360
+  }));
+
+  // Dolphins
+  function DolphinSVG({dx,dy,flip,hatColor}) {
+    const dBob = Math.sin(tick*0.15+dx*0.01)*8;
+    return (
+      <g transform={"translate("+dx+","+(dy+dBob)+")"+(flip?" scale(-1,1) translate(-60,0)":"")}>
+        {/* Body */}
+        <ellipse cx={30} cy={25} rx={28} ry={14} fill="#60A5FA"/>
+        {/* Belly */}
+        <ellipse cx={30} cy={28} rx={20} ry={8} fill="#BFDBFE" opacity={0.6}/>
+        {/* Tail */}
+        <path d="M2,25 Q-8,15 -5,8" fill="none" stroke="#3B82F6" strokeWidth={4} strokeLinecap="round"/>
+        <path d="M2,25 Q-8,32 -5,38" fill="none" stroke="#3B82F6" strokeWidth={3} strokeLinecap="round"/>
+        {/* Dorsal fin */}
+        <path d="M25,12 Q30,2 35,12" fill="#3B82F6"/>
+        {/* Snout */}
+        <ellipse cx={55} cy={23} rx={8} ry={5} fill="#60A5FA"/>
+        {/* Eye */}
+        <circle cx={48} cy={20} r={3} fill="white"/>
+        <circle cx={48} cy={20} r={1.8} fill="#1E1B4B"/>
+        {/* Smile */}
+        <path d={"M50,26 Q54,29 58,26"} fill="none" stroke="#1E3A8A" strokeWidth={1}/>
+        {/* Party hat */}
+        <polygon points="38,10 42,0 46,10" fill={hatColor||"#EC4899"}/>
+        <circle cx={42} cy={-1} r={2} fill="#FCD34D"/>
+        {/* Music notes */}
+        <text x={55} y={8} fontSize="8" opacity={0.7}>♪</text>
+      </g>
+    );
+  }
+
+  return (
+    <div style={{position:"relative"}}>
+      <svg viewBox="0 0 800 520" style={{width:"100%",height:"auto",borderRadius:14,border:"3px solid #EC4899",overflow:"hidden"}}>
+        <defs>
+          <linearGradient id="bday_sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#87CEEB"/><stop offset="40%" stopColor="#B0E0FF"/><stop offset="100%" stopColor="#E0F4FF"/></linearGradient>
+          <linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#38BDF8"/><stop offset="50%" stopColor="#0EA5E9"/><stop offset="100%" stopColor="#0369A1"/></linearGradient>
+        </defs>
+        <rect width="800" height="520" fill="url(#bday_sky)" rx="10"/>
+        {/* Sun */}
+        <circle cx="720" cy="60" r="35" fill="#FCD34D" opacity={0.8}/><circle cx="720" cy="60" r="28" fill="#FDE68A"/>
+        {/* Clouds */}
+        <g opacity={0.7}><ellipse cx={120} cy={50} rx={45} ry={16} fill="white"/><ellipse cx={100} cy={55} rx={25} ry={12} fill="white"/></g>
+        <g opacity={0.7}><ellipse cx={400} cy={35} rx={50} ry={16} fill="white"/><ellipse cx={380} cy={40} rx={28} ry={12} fill="white"/></g>
+        {/* Happy Birthday Banner */}
+        <rect x="220" y="70" width="360" height="40" rx="8" fill="#EC4899" opacity={0.9}/>
+        <text x="400" y="96" textAnchor="middle" fontSize="22" fontWeight="bold" fill="white">🎉 Happy Birthday Finley! 🎉</text>
+        {/* Ocean */}
+        <path d="M-10,340 L810,340 L810,520 L-10,520 Z" fill="url(#ocean)"/>
+        {/* Waves */}
+        <path d={"M0,350 Q50,340 100,350 Q150,360 200,350 Q250,340 300,350 Q350,360 400,350 Q450,340 500,350 Q550,360 600,350 Q650,340 700,350 Q750,360 800,350"} fill="none" stroke="white" strokeWidth={2} opacity={0.3}/>
+        <path d={"M0,365 Q50,355 100,365 Q150,375 200,365 Q250,355 300,365 Q350,375 400,365 Q450,355 500,365 Q550,375 600,365 Q650,355 700,365 Q750,375 800,365"} fill="none" stroke="white" strokeWidth={1.5} opacity={0.2}/>
+        {/* Sandy platforms for buildings */}
+        <ellipse cx={150} cy={340} rx={80} ry={20} fill="#FDE68A" opacity={0.8}/>
+        <ellipse cx={400} cy={340} rx={80} ry={20} fill="#FDE68A" opacity={0.8}/>
+        <ellipse cx={650} cy={340} rx={80} ry={20} fill="#FDE68A" opacity={0.8}/>
+        {/* Dolphins */}
+        <DolphinSVG dx={60} dy={380} flip={false} hatColor="#EC4899"/>
+        <DolphinSVG dx={250} dy={410} flip={true} hatColor="#FCD34D"/>
+        <DolphinSVG dx={480} dy={390} flip={false} hatColor="#8B5CF6"/>
+        <DolphinSVG dx={650} dy={420} flip={true} hatColor="#10B981"/>
+        <DolphinSVG dx={350} dy={450} flip={false} hatColor="#3B82F6"/>
+        {/* Confetti */}
+        {confetti.map((c,i)=>(
+          <rect key={i} x={c.x} y={c.y} width={c.size} height={c.size*1.5} rx={1} fill={c.color} opacity={0.7} transform={"rotate("+c.rot+" "+c.x+" "+c.y+")"}/>
+        ))}
+        {/* Buildings */}
+        {buildings.map(b=><Building3D key={b.id} x={b.x} btype={b.btype} name={b.name} onClick={()=>clickB(b)}/>)}
+        {/* NPCs */}
+        {npcs.map((npc,i)=><NpcOwl key={i} x={npc.startX} y={410} npc={npc} tick={tick} onClick={()=>clickNpc(npc)}/>)}
+        {/* Active pet */}
+        {activePet && (
+          <g transform={"translate(0,"+petBob+")"}>
+            <PetSVG pet={activePet} x={petPos.x} y={petPos.y} size={28}/>
+          </g>
+        )}
+        {/* Owl */}
+        <g transform={"translate(0,"+bob+")"}><Owl x={owlPos.x} y={owlPos.y} size={42} color={owlColor} name={owlName} isFlying={flying}/></g>
+        {speechBubble&&<SpeechBubble x={speechBubble.x} y={speechBubble.y} text={speechBubble.text} name={speechBubble.name}/>}
+        <rect x="280" y="8" width="240" height="30" rx="15" fill="rgba(236,72,153,0.7)"/>
+        <text x="400" y="28" textAnchor="middle" fontSize="16" fill="white" fontWeight="bold">🎂 Birthday Island</text>
+      </svg>
+      <button onClick={onBack} style={{position:"absolute",top:12,left:12,background:"rgba(0,0,0,0.4)",color:"white",border:"1px solid rgba(255,255,255,0.3)",borderRadius:10,padding:"6px 14px",cursor:"pointer",fontWeight:"bold",fontSize:13,zIndex:5}}>← Back to Opal</button>
+    </div>
+  );
+}
+
+/* ---- DOLPHIN MOVIE THEATER ---- */
+function MovieTheaterModal({onClose}) {
+  const [movie, setMovie] = useState(null);
+  const [frame, setFrame] = useState(0);
+  const timerRef = useRef(null);
+
+  const movies = [
+    { title:"Flipper's Big Adventure", desc:"A dolphin travels across the ocean to find a magical coral reef!", color:"#3B82F6", scenes:[
+      {bg:"#0EA5E9",text:"Flipper swims through the deep blue ocean...",emoji:"🌊"},
+      {bg:"#059669",text:"He discovers a colorful coral reef!",emoji:"🪸"},
+      {bg:"#7C3AED",text:"He makes friends with a sea turtle!",emoji:"🐢"},
+      {bg:"#F59E0B",text:"Together they find the golden shell! THE END",emoji:"⭐"},
+    ]},
+    { title:"Dolphins in Space", desc:"What if dolphins could fly to the moon?", color:"#7C3AED", scenes:[
+      {bg:"#1E1B4B",text:"Captain Dolphin blasts off in a rocket!",emoji:"🚀"},
+      {bg:"#0F172A",text:"Floating through the stars...",emoji:"⭐"},
+      {bg:"#374151",text:"They land on the moon!",emoji:"🌙"},
+      {bg:"#1E1B4B",text:"Moon dolphins dance in zero gravity! THE END",emoji:"🐬"},
+    ]},
+    { title:"The Dolphin Birthday Party", desc:"Dolly the dolphin plans the best party ever!", color:"#EC4899", scenes:[
+      {bg:"#EC4899",text:"Dolly sends invitations to all her friends!",emoji:"📨"},
+      {bg:"#F59E0B",text:"They decorate with balloons and streamers!",emoji:"🎈"},
+      {bg:"#8B5CF6",text:"Everyone sings Happy Birthday!",emoji:"🎶"},
+      {bg:"#10B981",text:"Best birthday ever! Happy Birthday Finley! THE END",emoji:"🎂"},
+    ]},
+  ];
+
+  function playMovie(m) {
+    setMovie(m); setFrame(0);
+  }
+
+  function nextFrame() {
+    if (frame < movie.scenes.length - 1) setFrame(f => f + 1);
+    else { setMovie(null); setFrame(0); }
+  }
+
+  if (!movie) {
+    return (
+      <ModalWrap title="Movie Theater" emoji="🎬" color="#EC4899" onClose={onClose}>
+        <p style={{color:"#6B7280",fontSize:13,textAlign:"center",margin:"0 0 12px"}}>Pick a dolphin movie to watch!</p>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {movies.map((m,i)=>(
+            <button key={i} onClick={()=>playMovie(m)} style={{display:"flex",alignItems:"center",gap:12,padding:14,borderRadius:12,border:"2px solid "+m.color,background:"white",cursor:"pointer",textAlign:"left"}}>
+              <div style={{width:50,height:40,borderRadius:6,background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🐬</div>
+              <div><div style={{fontWeight:"bold",fontSize:14,color:m.color}}>{m.title}</div><div style={{fontSize:11,color:"#6B7280"}}>{m.desc}</div></div>
+            </button>
+          ))}
+        </div>
+      </ModalWrap>
+    );
+  }
+
+  const scene = movie.scenes[frame];
+  return (
+    <ModalWrap title={movie.title} emoji="🎬" color={movie.color} onClose={()=>{setMovie(null);setFrame(0);}}>
+      <div style={{background:scene.bg,borderRadius:12,padding:24,textAlign:"center",minHeight:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <p style={{fontSize:48,margin:"0 0 12px"}}>{scene.emoji}</p>
+        <p style={{color:"white",fontSize:16,fontWeight:"bold",lineHeight:1.5,margin:0,textShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>{scene.text}</p>
+      </div>
+      <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:10}}>
+        {movie.scenes.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===frame?movie.color:"#D1D5DB"}}/>)}
+      </div>
+      <button onClick={nextFrame} style={{width:"100%",marginTop:10,padding:12,background:movie.color,color:"white",border:"none",borderRadius:10,fontWeight:"bold",fontSize:14,cursor:"pointer"}}>
+        {frame<movie.scenes.length-1?"Next ▶":"\u2714 Done!"}
+      </button>
+    </ModalWrap>
+  );
+}
+
+/* ---- DOLPHIN PUZZLE ---- */
+function PuzzlePlaceModal({onClose}) {
+  const [puzzle, setPuzzle] = useState(null);
+  const [tiles, setTiles] = useState([]);
+  const [moves, setMoves] = useState(0);
+  const [solved, setSolved] = useState(false);
+  const [selected, setSelected] = useState(-1);
+
+  const puzzles = [
+    { name:"Dolphin Jumping", emoji:"🐬", icons:["\ud83c\udf0a","🐬","\ud83c\udf0a","⭐","🐬","⭐","\ud83c\udf0a","⭐","🐬"] },
+    { name:"Ocean Sunset", emoji:"🌅", icons:["☀️","\ud83c\udf05","☀️","🌙","⭐","🌙","\ud83c\udf05","⭐","\ud83c\udf05"] },
+    { name:"Party Time", emoji:"🎉", icons:["🎈","🎂","🎁","🎂","🎉","🎂","🎁","🎈","🎉"] },
+  ];
+
+  function startPuzzle(p) {
+    const order = p.icons.map((icon,i)=>({id:i,icon:icon}));
+    let shuffled;
+    do {
+      shuffled = [...order].sort(()=>Math.random()-0.5);
+    } while (shuffled.every((t,i)=>t.id===i));
+    setPuzzle(p); setTiles(shuffled); setMoves(0); setSolved(false); setSelected(-1);
+  }
+
+  function tapTile(idx) {
+    if (solved) return;
+    if (selected === -1) {
+      setSelected(idx);
+    } else if (selected === idx) {
+      setSelected(-1);
+    } else {
+      const newTiles = [...tiles];
+      const temp = newTiles[selected];
+      newTiles[selected] = newTiles[idx];
+      newTiles[idx] = temp;
+      setTiles(newTiles);
+      setMoves(m => m + 1);
+      setSelected(-1);
+      // Check if every tile's icon matches the goal icon at that position
+      const isSolved = newTiles.every((t,i) => t.icon === puzzle.icons[i]);
+      if (isSolved) setSolved(true);
+    }
+  }
+
+  if (!puzzle) {
+    return (
+      <ModalWrap title="Puzzle Place" emoji="🧩" color="#3B82F6" onClose={onClose}>
+        <p style={{color:"#6B7280",fontSize:13,textAlign:"center",margin:"0 0 12px"}}>Pick a dolphin puzzle! Swap tiles to match the goal pattern.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {puzzles.map((p,i)=>(
+            <button key={i} onClick={()=>startPuzzle(p)} style={{padding:14,borderRadius:12,border:"2px solid #3B82F6",background:"white",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:28}}>{p.emoji}</span>
+              <span style={{fontWeight:"bold",fontSize:14,color:"#1E3A8A"}}>{p.name}</span>
+            </button>
+          ))}
+        </div>
+      </ModalWrap>
+    );
+  }
+
+  return (
+    <ModalWrap title={puzzle.name} emoji="🧩" color="#3B82F6" onClose={()=>{setPuzzle(null);setSolved(false);}}>
+      {/* Goal pattern */}
+      <p style={{textAlign:"center",fontSize:12,fontWeight:"bold",color:"#1E40AF",margin:"0 0 4px"}}>🎯 Goal Pattern:</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:3,maxWidth:150,margin:"0 auto 12px",padding:8,background:"#EFF6FF",borderRadius:10,border:"2px solid #93C5FD"}}>
+        {puzzle.icons.map((icon,i)=>(
+          <div key={i} style={{width:"100%",aspectRatio:"1",borderRadius:6,background:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{icon}</div>
+        ))}
+      </div>
+
+      <p style={{textAlign:"center",fontSize:12,color:"#6B7280",margin:"0 0 6px"}}>Tap two tiles to swap them! Moves: <b>{moves}</b></p>
+
+      {/* Player tiles */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,maxWidth:240,margin:"0 auto"}}>
+        {tiles.map((t,i)=>{
+          const isCorrect = t.icon === puzzle.icons[i];
+          const isSel = selected === i;
+          return (
+            <button key={i} onClick={()=>tapTile(i)} style={{
+              width:"100%",aspectRatio:"1",borderRadius:8,
+              background:solved?"#D1FAE5":isSel?"#DBEAFE":isCorrect?"#ECFDF5":"white",
+              border:isSel?"3px solid #1E3A8A":isCorrect?"3px solid #10B981":"3px solid #E5E7EB",
+              cursor:solved?"default":"pointer",fontSize:28,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              transition:"all 0.15s",
+              transform:isSel?"scale(1.1)":"scale(1)"
+            }}>{t.icon}</button>
+          );
+        })}
+      </div>
+
+      {solved && (
+        <div style={{textAlign:"center",marginTop:12}}>
+          <p style={{fontSize:18,fontWeight:"bold",color:"#059669"}}>🎉 Puzzle solved in {moves} moves!</p>
+          <button onClick={()=>{setPuzzle(null);setSolved(false);}} style={{marginTop:8,padding:"8px 20px",background:"#3B82F6",color:"white",border:"none",borderRadius:8,fontWeight:"bold",cursor:"pointer"}}>Back to Puzzles</button>
+        </div>
+      )}
+    </ModalWrap>
+  );
+}
+
+/* ---- ROCK CLIMBING ---- */
+function RockClimbingModal({owlColor, onEarnBucks, onClose}) {
+  const [route, setRoute] = useState(null);
+  const [owlHold, setOwlHold] = useState(-1);
+  const [rappelling, setRappelling] = useState(false);
+  const [completed, setCompleted] = useState([]);
+  const [fb, setFb] = useState(null);
+
+  const routes = [
+    { name:"Blue Route", color:"#3B82F6", holds:[
+      {x:60,y:340},{x:80,y:290},{x:50,y:240},{x:75,y:190},{x:55,y:140},{x:70,y:90},{x:60,y:45}
+    ]},
+    { name:"Pink Route", color:"#EC4899", holds:[
+      {x:200,y:340},{x:180,y:285},{x:210,y:235},{x:185,y:185},{x:205,y:135},{x:190,y:85},{x:200,y:40}
+    ]},
+    { name:"Green Route", color:"#10B981", holds:[
+      {x:340,y:340},{x:320,y:295},{x:350,y:245},{x:325,y:195},{x:345,y:145},{x:330,y:95},{x:340,y:45}
+    ]},
+  ];
+
+  function startRoute(r) {
+    setRoute(r); setOwlHold(-1); setRappelling(false); setFb(null);
+  }
+
+  function clickHold(idx) {
+    if (rappelling) return;
+    if (idx === owlHold + 1) {
+      setOwlHold(idx);
+      if (idx === route.holds.length - 1) {
+        setFb("🎉 You reached the top! +2 Owl Bucks!");
+        onEarnBucks(2);
+        setCompleted(c => c.includes(route.name) ? c : [...c, route.name]);
+        setTimeout(() => {
+          setRappelling(true);
+          let rh = idx;
+          const rappelTimer = setInterval(() => {
+            rh--;
+            setOwlHold(rh);
+            if (rh <= -1) {
+              clearInterval(rappelTimer);
+              setRappelling(false);
+              setTimeout(() => { setRoute(null); setFb(null); }, 500);
+            }
+          }, 300);
+        }, 1500);
+      }
+    }
+  }
+
+  if (!route) {
+    return (
+      <ModalWrap title="Rock Climbing" emoji="🧗" color="#065F46" onClose={onClose}>
+        <p style={{color:"#6B7280",fontSize:13,textAlign:"center",margin:"0 0 12px"}}>Pick a climbing route! Reach the top to earn 🪙 2 Owl Bucks.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {routes.map((r,i)=>{
+            const done = completed.includes(r.name);
+            return (
+              <button key={i} onClick={()=>startRoute(r)} style={{padding:14,borderRadius:12,border:"2px solid "+r.color,background:done?"#F0FDF4":"white",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                <span style={{fontWeight:"bold",fontSize:14,color:r.color}}>{r.name}</span>
+                {done && <span style={{marginLeft:"auto",fontSize:12}}>✅</span>}
+              </button>
+            );
+          })}
+        </div>
+      </ModalWrap>
+    );
+  }
+
+  return (
+    <ModalWrap title={route.name} emoji="🧗" color={route.color} onClose={()=>{setRoute(null);setFb(null);}}>
+      {fb && <div style={{background:"#D1FAE5",borderRadius:8,padding:8,textAlign:"center",fontWeight:"bold",color:"#065F46",fontSize:13,marginBottom:8}}>{fb}</div>}
+      <p style={{textAlign:"center",fontSize:11,color:"#6B7280",margin:"0 0 6px"}}>Click the next hold to climb up! {rappelling?"Rappelling down...":""}</p>
+      <svg viewBox="0 0 400 380" style={{width:"100%",background:"#F5F0E8",borderRadius:12,border:"2px solid #D1D5DB"}}>
+        {/* Wall */}
+        <rect x="0" y="0" width="400" height="380" fill="#E5E7EB" rx="8"/>
+        <rect x="0" y="0" width="400" height="380" fill="none" stroke="#9CA3AF" strokeWidth="2" rx="8"/>
+        {/* Wall texture */}
+        {Array.from({length:8},(_,i)=><line key={"wl"+i} x1={0} y1={i*48} x2={400} y2={i*48} stroke="#D1D5DB" strokeWidth={0.5}/>)}
+        {/* All three route holds (faded) */}
+        {routes.filter(r=>r.name!==route.name).map(r=>r.holds.map((h,i)=>(
+          <circle key={r.name+i} cx={h.x} cy={h.y} r={8} fill={r.color} opacity={0.15}/>
+        )))}
+        {/* Active route holds */}
+        {route.holds.map((h,i)=>{
+          const isNext = i === owlHold + 1 && !rappelling;
+          const isClimbed = i <= owlHold;
+          return (
+            <g key={i} onClick={()=>clickHold(i)} style={{cursor:isNext?"pointer":"default"}}>
+              <circle cx={h.x} cy={h.y} r={12} fill={route.color} opacity={isClimbed?0.4:isNext?1:0.6}/>
+              {isNext && <circle cx={h.x} cy={h.y} r={14} fill="none" stroke={route.color} strokeWidth={2} opacity={0.5}/>}
+              {isNext && <circle cx={h.x} cy={h.y} r={17} fill="none" stroke={route.color} strokeWidth={1} opacity={0.3}/>}
+            </g>
+          );
+        })}
+        {/* Owl on the wall */}
+        {owlHold >= 0 && owlHold < route.holds.length && (
+          <Owl x={route.holds[owlHold].x+20} y={route.holds[owlHold].y} size={30} color={owlColor} isFlying={false}/>
+        )}
+        {owlHold === -1 && (
+          <Owl x={route.holds[0].x+20} y={370} size={30} color={owlColor} isFlying={false}/>
+        )}
+        {/* Top label */}
+        <text x={route.holds[route.holds.length-1].x} y={25} textAnchor="middle" fontSize="10" fill={route.color} fontWeight="bold">TOP!</text>
+      </svg>
+    </ModalWrap>
   );
 }
 
@@ -2105,7 +2543,7 @@ function IslandZone({island,buildings,owlColor,owlName,onBuildingClick,onBack,ti
 }
 
 /* ---- OVERWORLD ---- */
-function OverworldMap({owlPos,onIslandClick,owlColor,owlName,isFlying,tick}) {
+function OverworldMap({owlPos,onIslandClick,owlColor,owlName,isFlying,tick,islands}) {
   const bob=Math.sin(tick*0.3)*3;
   return (
     <svg viewBox="0 0 800 550" style={{width:"100%",height:"auto",borderRadius:14,border:"3px solid #4C1D95",background:"#070B1A"}}>
@@ -2113,7 +2551,7 @@ function OverworldMap({owlPos,onIslandClick,owlColor,owlName,isFlying,tick}) {
       <rect width="800" height="550" fill="url(#bg)" rx="10"/>
       {Array.from({length:55},(_,i)=><circle key={i} cx={(i*137+23)%800} cy={(i*89+11)%550} r={0.8+(i%3)*0.6} fill="white" opacity={0.2+(i%4)*0.12}/>)}
       <ellipse cx="400" cy="280" rx="300" ry="190" fill="none" stroke="#818CF8" strokeWidth={1} opacity={0.12}/>
-      {ISLANDS.map(isl=>(
+      {islands.map(isl=>(
         <g key={isl.id} onClick={()=>onIslandClick(isl)} style={{cursor:"pointer"}}>
           <ellipse cx={isl.x} cy={isl.y+isl.r*0.6} rx={isl.r*0.7} ry={isl.r*0.15} fill="rgba(0,0,0,0.2)"/>
           <path d={"M"+(isl.x-isl.r*0.65)+","+(isl.y+isl.r*0.08)+" Q"+(isl.x-isl.r*0.25)+","+(isl.y+isl.r*0.75)+" "+isl.x+","+(isl.y+isl.r*0.6)+" Q"+(isl.x+isl.r*0.25)+","+(isl.y+isl.r*0.75)+" "+(isl.x+isl.r*0.65)+","+(isl.y+isl.r*0.08)} fill="#8B7355" opacity={0.6}/>
@@ -2279,8 +2717,9 @@ function OpalGame() {
       </div>
       {msg&&<div style={{background:"rgba(124,58,237,0.85)",color:"white",textAlign:"center",padding:6,borderRadius:8,fontWeight:"bold",fontSize:13,maxWidth:800,margin:"0 auto 6px"}}>{msg}</div>}
       <div style={{maxWidth:800,margin:"0 auto",position:"relative"}}>
-        {view==="overworld"&&<OverworldMap owlPos={owlPos} onIslandClick={flyToIsland} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} isFlying={isFlying} tick={tick}/>}
-        {(view==="island"||view==="destination")&&currentIsland&&<IslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick} pets={pets} activePet={activePet} onTogglePet={(pet)=>setActivePet(pet)}/>}
+        {view==="overworld"&&<OverworldMap owlPos={owlPos} onIslandClick={flyToIsland} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} isFlying={isFlying} tick={tick} islands={getIslands(owlName)}/>}
+        {(view==="island"||view==="destination")&&currentIsland&&currentIsland.id==="birthday"&&<BirthdayIslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick} pets={pets} activePet={activePet} onTogglePet={(pet)=>setActivePet(pet)}/>}
+        {(view==="island"||view==="destination")&&currentIsland&&currentIsland.id!=="birthday"&&<IslandZone island={currentIsland} buildings={buildings} owlColor={OWL_COLORS[colorIdx]} owlName={owlName} onBuildingClick={handleBuildingClick} onBack={goBack} tick={tick} pets={pets} activePet={activePet} onTogglePet={(pet)=>setActivePet(pet)}/>}
       </div>
 
       {activeModal==="math_class"&&<MathClassModal bucks={bucks} onEarn={n=>{SFX.earnBucks();trackEvent('bucks_earned',{source:'math',amount:n});setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
@@ -2331,6 +2770,9 @@ function OpalGame() {
       {activeModal==="post_office"&&<PostOfficeModal inventory={inventory} onClose={()=>setActiveModal(null)}/>}
       {activeModal==="hotel"&&<HotelModal energy={energy} onSleep={()=>setEnergy(e=>Math.min(100,e+50))} onClose={()=>setActiveModal(null)}/>}
       {(activeModal==="campsite"||activeModal==="trail"||activeModal==="ranger")&&<DestModal destName={activeModal.replace(/_/g," ")} onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="movie_theater"&&<MovieTheaterModal onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="puzzle_place"&&<PuzzlePlaceModal onClose={()=>setActiveModal(null)}/>}
+      {activeModal==="rock_climbing"&&<RockClimbingModal owlColor={OWL_COLORS[colorIdx]} onEarnBucks={(n)=>{SFX.earnBucks();trackEvent('bucks_earned',{source:'climbing',amount:n});setBucks(b=>b+n);}} onClose={()=>setActiveModal(null)}/>}
 
       <div style={{maxWidth:800,margin:"8px auto 0",textAlign:"center",color:"#6366F1",fontSize:11}}>💡 Earn Owl Bucks at School & Engineering. Spend wisely — needs before wants!</div>
     </div>
